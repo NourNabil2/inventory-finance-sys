@@ -45,14 +45,21 @@ class InvoicesCubit extends Cubit<InvoicesState> {
 
   Future<void> selectInvoice(String? invoiceId) async {
     final current = state;
-    if (current is! InvoicesLoaded) return;
 
     if (invoiceId == null) {
-      emit(InvoicesLoaded(invoices: current.invoices));
+      // لو عندنا invoices حطها، لو لأ ابعت empty list
+      final invoices = current is InvoicesLoaded ? current.invoices : <InvoiceEntity>[];
+      emit(InvoicesLoaded(invoices: invoices));
       return;
     }
 
+    // ✅ مش محتاجين InvoicesLoaded عشان نجيب التفاصيل
+    final previousInvoices = current is InvoicesLoaded
+        ? current.invoices
+        : <InvoiceEntity>[];
+
     emit(InvoicesLoading());
+
     final result = await _repository.getInvoiceDetails(invoiceId);
     result.fold(
           (f) => emit(InvoicesError(f.message)),
@@ -60,7 +67,7 @@ class InvoicesCubit extends Cubit<InvoicesState> {
         final summaryResult = await _repository.getPaymentSummary(invoiceId);
         final summary = summaryResult.fold((_) => null, (s) => s);
         emit(InvoicesLoaded(
-          invoices: current.invoices,
+          invoices: previousInvoices, // ✅ مش هنخسر القائمة
           selectedInvoice: invoice,
           paymentSummary: summary,
         ));

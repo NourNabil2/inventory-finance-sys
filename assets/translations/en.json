@@ -48,7 +48,8 @@
     "error_load": "Error loading data",
     "noCameras": "No Data",
     "noCamerasSubtitle": "No rentals recorded yet",
-    "currency": "EGP"
+    "currency": "EGP",
+    "currency_en": "EGP"
   },
   "inventory": {
     "title": "Inventory List",

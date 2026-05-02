@@ -6,6 +6,11 @@ import 'package:bungee_manage_sys/features/alerts/domain/repositories/alerts_rep
 import 'package:bungee_manage_sys/features/alerts/domain/usecases/dismiss_alert_usecase.dart';
 import 'package:bungee_manage_sys/features/alerts/domain/usecases/get_alerts_usecase.dart';
 import 'package:bungee_manage_sys/features/alerts/presentation/cubit/alerts_cubit.dart';
+import 'package:bungee_manage_sys/features/all_invoices/data/datasources/all_invoices_remote_datasource.dart';
+import 'package:bungee_manage_sys/features/all_invoices/data/repositories/all_invoices_repository_impl.dart';
+import 'package:bungee_manage_sys/features/all_invoices/domain/repositories/all_invoices_repository.dart';
+import 'package:bungee_manage_sys/features/all_invoices/domain/usecases/get_all_invoices_usecase.dart';
+import 'package:bungee_manage_sys/features/all_invoices/pagination/presentation/cubit/all_invoices_cubit.dart';
 import 'package:bungee_manage_sys/features/auth/presentation/cubit/login_cubit.dart';
 import 'package:bungee_manage_sys/features/customers/data/datasources/customers_remote_datasource.dart';
 import 'package:bungee_manage_sys/features/customers/data/datasources/invoices_remote_datasource.dart';
@@ -58,6 +63,7 @@ Future<void> init() async {
   _setUpInvoices();
   _setUpFinance();
   _setUpAlerts();
+  _all_invoices();
 
   sl.registerLazySingleton(() => UserRepository());
 }
@@ -181,5 +187,26 @@ void _setUpAlerts() {
   sl.registerFactory(() => AlertsCubit(
     sl<GetAlertsUseCase>(),
     sl<DismissAlertUseCase>(),
+  ));
+}
+
+void _all_invoices() {
+  // Data Source
+  sl.registerLazySingleton<AllInvoicesRemoteDataSource>(
+        () => AllInvoicesRemoteDataSourceImpl(sl<SupabaseClient>()),
+  );
+
+  // Repository
+  sl.registerLazySingleton<AllInvoicesRepository>(
+        () => AllInvoicesRepositoryImpl(sl<AllInvoicesRemoteDataSource>()),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton(() => GetAllInvoicesUseCase(sl<AllInvoicesRepository>()));
+
+
+  // Cubit
+  sl.registerFactory(() => AllInvoicesCubit(
+    sl<GetAllInvoicesUseCase>(),
   ));
 }

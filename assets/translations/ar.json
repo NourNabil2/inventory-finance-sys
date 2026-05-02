@@ -39,6 +39,7 @@
     "nav_invoices": "الفواتير",
     "nav_finance": "الحسابات",
     "nav_alert": "التنبيهات",
+    "nav_all_invoices": "كل الفواتير",
     "nav_suppliers": "الموردين",
     "nav_logout": "تسجيل الخروج",
     "logout_title": "تسجيل الخروج",
@@ -48,7 +49,8 @@
     "error_load": "حدث خطأ في تحميل البيانات",
     "noCameras": "لا توجد بيانات",
     "noCamerasSubtitle": "لم يتم تسجيل أي تأجيرات بعد",
-    "currency": "ج.م"
+    "currency": "ج.م",
+    "currency_en": "L.E"
   },
   "inventory": {
     "title": "قائمة المخزن",
@@ -286,6 +288,54 @@
     "out": "بالخارج",
     "returned": "مرتجع"
   },
+  "all_invoices": {
+    "title": "كل الفواتير",
+    "filter": "فلترة",
+    "search_hint": "ابحث باسم العميل...",
+    "empty_title": "لا توجد فواتير",
+    "empty_sub": "لم يتم إنشاء أي فواتير بعد أو لا توجد نتائج مطابقة",
+    "clear_filters": "مسح الفلاتر",
+    "apply_filter": "تطبيق الفلاتر",
+    "filter_date_range": "نطاق التاريخ",
+    "filter_status": "حالة الفاتورة",
+    "filter_payment": "حالة الدفع",
+    "from": "من تاريخ",
+    "to": "إلى تاريخ",
+    "status_all": "الكل",
+    "payment_all": "الكل",
+    "payment_paid": "مدفوع بالكامل",
+    "payment_partial": "مدفوع جزئياً",
+    "payment_unpaid": "غير مدفوع",
+    "showing": "عرض {start}–{end} من {total} فاتورة",
+    "has_debt": "متبقي {amount} {currency}",
+    "export_excel": "تصدير Excel",
+    "export_title": "تصدير فواتير Excel",
+    "export_period": "الفترة الزمنية",
+    "export_status": "فلترة بالحالة",
+    "export_payment": "فلترة بالدفع",
+    "export_btn": "تصدير الآن",
+    "export_success": "تم تصدير الملف بنجاح",
+    "export_error": "حدث خطأ أثناء التصدير",
+    "export_period_all": "كل الفترات",
+    "export_period_today": "اليوم",
+    "export_period_week": "آخر 7 أيام",
+    "export_period_month": "الشهر الحالي",
+    "export_period_custom": "تحديد فترة مخصصة...",
+    "export_col_number": "رقم الفاتورة",
+    "export_col_customer": "العميل",
+    "export_col_phone": "الهاتف",
+    "export_col_status": "الحالة",
+    "export_col_net_total": "الصافي المستحق",
+    "export_col_paid": "المدفوع",
+    "export_col_remaining": "المتبقي",
+    "export_col_date": "تاريخ الإنشاء",
+    "export_sheet_name": "تقرير الفواتير",
+    "export_report_title": "تقرير الفواتير - {period}",
+    "export_summary_total": "إجمالي الفواتير",
+    "export_summary_net": "إجمالي الصافي",
+    "export_summary_paid": "إجمالي المدفوع",
+    "export_summary_remaining": "إجمالي المتبقي"
+  },
   "auth": {
     "welcome": "مرحباً بك",
     "loginSubtitle": "سجّل دخولك للمتابعة",
@@ -314,6 +364,7 @@
     "nonNegativeRequired": "برجاء إدخال رقم صحيح (صفر أو أكثر)"
   },
   "errors": {
+    "loadFailed": "فشل تحميل البيانات",
     "network": {
       "title": "لا يوجد اتصال",
       "subtitle": "تحقق من اتصالك بالإنترنت",
@@ -369,7 +420,8 @@
     "understood": "فهمت",
     "details": "التفاصيل",
     "close": "إغلاق",
-    "load_more": "عرض المزيد"
+    "load_more": "عرض المزيد",
+    "clear": "مسح"
   },
   "nav": {
     "dashboard": "الرئيسية",

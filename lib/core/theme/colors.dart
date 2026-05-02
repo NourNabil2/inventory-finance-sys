@@ -4,15 +4,22 @@ import 'dart:ui';
 class ColorsManager {
   /// ── Primary ───────────────────────────────────────────────
   /// Slate-blue — professional, calm, works on both light & dark
-  static const Color primaryColor = Color(0xFF3B5BDB);       // indigo-600
-  static const Color primaryLight = Color(0xFFEEF2FF);       // indigo-50
-  static const Color primaryDark = Color(0xFF2F4AC0);        // indigo-700
+  //   static const Color primaryColor = Color(0xFFE0AC00);       // indigo-600
+  //   static const Color primaryLight = Color(0xFFEEF2FF);       // indigo-50
+  //   static const Color primaryDark = Color(0xFF2F4AC0);        // indigo-700
+  //
+  //   static const Color secondaryColor = Color(0xFF0F172A);     // slate-900
+  //
+  //   /// ── Dark Mode Surfaces ────────────────────────────────────
+  //   static const Color darkColor = Color(0xFF000000);          // slate-900
+  //   static const Color secondaryDarkColor = Color(0xFF232323); // slate-800
+  static const Color primaryColor = Color(0xFF6366F1);
+  static const Color primaryLight = Color(0xFFEEF2FF);
+  static const Color primaryDark = Color(0xFF4F46E5);
+  static const Color secondaryColor = Color(0xFF06B6D4);
 
-  static const Color secondaryColor = Color(0xFF0F172A);     // slate-900
-
-  /// ── Dark Mode Surfaces ────────────────────────────────────
-  static const Color darkColor = Color(0xFF0F172A);          // slate-900
-  static const Color secondaryDarkColor = Color(0xFF1E293B); // slate-800
+  static const Color darkColor = Color(0xFF0B0E14);
+  static const Color secondaryDarkColor = Color(0xFF161B22);
 
   /// ── Neutral / Surface ─────────────────────────────────────
   static const Color defaultSurface = Color(0xFFF8FAFC);     // slate-50

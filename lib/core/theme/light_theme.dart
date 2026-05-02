@@ -27,9 +27,6 @@ class LightTheme {
       surface: ColorsManager.defaultSurface,
       surfaceContainerHighest: ColorsManager.backgroundCard,
 
-      // Background
-      background: ColorsManager.backgroundSurface,
-
       // Error colors
       error: ColorsManager.errorFill,
       onError: ColorsManager.errorOnFill,
@@ -87,7 +84,7 @@ class LightTheme {
     ),
 
     // Card Theme
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       color: Colors.white,
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.1),

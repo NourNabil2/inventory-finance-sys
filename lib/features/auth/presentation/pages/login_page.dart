@@ -1,10 +1,14 @@
 // lib/features/auth/presentation/pages/login_page.dart
 import 'dart:developer';
 
+import 'package:bungee_manage_sys/core/utils/assets.dart';
 import 'package:bungee_manage_sys/core/widgets/app_buton.dart';
 import 'package:bungee_manage_sys/core/widgets/app_text_feild.dart';
+import 'package:bungee_manage_sys/core/widgets/custom_lottie_icon.dart';
+import 'package:bungee_manage_sys/core/widgets/custom_network_image.dart';
 import 'package:bungee_manage_sys/core/widgets/custom_snack_bar.dart';
 import 'package:bungee_manage_sys/core/widgets/responsive_layout.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -103,26 +107,13 @@ class _DesktopShell extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          flex: 5,
+          flex: 6,
           child: Container(
-            color: ColorsManager.primaryColor,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inventory_2_rounded,
-                      size: 64.sp, color: Colors.white),
-                  SizedBox(height: 20.h),
-                  Text('app.name'.tr(),
-                      style: TextStyle(
-                        fontSize: 28.sp,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      )),
-                  SizedBox(height: 8.h),
-                  Text('app.subtitle'.tr(),
-                      style: TextStyle(fontSize: 14.sp, color: Colors.white70)),
-                ],
+            decoration: const BoxDecoration(
+              color: ColorsManager.primaryColor,
+              image: DecorationImage(
+                image: AssetImage(Assets.appBg),
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -132,9 +123,19 @@ class _DesktopShell extends StatelessWidget {
           child: Center(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: 56.w, vertical: 40.h),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: form,
+              child: Column(
+                children: [
+                  CustomLottieIcon(
+                    assetPath: Assets.cameraLotti,
+                    width: 200.w,
+                    height: 200.w,
+                    repeat: true,
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: form,
+                  ),
+                ],
               ),
             ),
           ),
@@ -161,15 +162,12 @@ class _MobileShell extends StatelessWidget {
             child: Column(
               children: [
                 SizedBox(height: 56.h),
-                Container(
-                  width: 60.w,
-                  height: 60.w,
-                  decoration: BoxDecoration(
-                    color: ColorsManager.primaryColor,
-                    borderRadius: BorderRadius.circular(14.r),
-                  ),
-                  child: Icon(Icons.inventory_2_rounded,
-                      color: Colors.white, size: 32.sp),
+                // ✅ استبدلنا الـ Container باللوجو بـ Lottie
+                CustomLottieIcon(
+                  assetPath: Assets.cameraLotti,
+                  width: 120.w,
+                  height: 120.w,
+                  repeat: true,
                 ),
                 SizedBox(height: 24.h),
                 Text('auth.welcome'.tr(),

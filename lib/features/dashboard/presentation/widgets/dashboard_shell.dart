@@ -1,7 +1,10 @@
 // lib/features/dashboard/presentation/pages/dashboard_shell.dart
 
+import 'package:bungee_manage_sys/core/utils/assets.dart';
 import 'package:bungee_manage_sys/features/alerts/presentation/cubit/alerts_cubit.dart';
 import 'package:bungee_manage_sys/features/alerts/presentation/pages/alerts_page.dart';
+import 'package:bungee_manage_sys/features/all_invoices/pagination/presentation/cubit/all_invoices_cubit.dart';
+import 'package:bungee_manage_sys/features/all_invoices/pagination/presentation/pages/all_invoices_page.dart';
 import 'package:bungee_manage_sys/features/customers/presentation/cubit/customers_cubit.dart';
 import 'package:bungee_manage_sys/features/customers/presentation/cubit/invoices_cubit.dart';
 import 'package:bungee_manage_sys/features/customers/presentation/pages/customers_page.dart';
@@ -24,6 +27,8 @@ import 'package:bungee_manage_sys/features/dashboard/presentation/pages/dashboar
 import 'package:bungee_manage_sys/features/inventory/presentation/cubit/inventory_cubit.dart';
 import 'package:bungee_manage_sys/features/inventory/presentation/pages/inventory_page.dart';
 
+import '../../../../core/widgets/custom_lottie_icon.dart';
+
 // ─── Nav Item Model ───────────────────────────────────────────────────────────
 
 class NavItem {
@@ -39,14 +44,14 @@ class NavItem {
 }
 
 const List<NavItem> kNavItems = [
-  NavItem(icon: Icons.dashboard_outlined,              labelKey: 'dashboard.nav_home',      index: 0),
-  NavItem(icon: Icons.videocam_outlined,               labelKey: 'dashboard.nav_inventory', index: 1),
-  NavItem(icon: Icons.people_outline,                  labelKey: 'dashboard.nav_customers', index: 2),
-  NavItem(icon: Icons.account_balance_wallet_outlined, labelKey: 'dashboard.nav_finance',   index: 3),
-  NavItem(icon: Icons.local_shipping_outlined,         labelKey: 'dashboard.nav_suppliers', index: 4),
-  NavItem(icon: Icons.notifications_none_outlined,     labelKey: 'dashboard.nav_alert',     index: 5),
-//  NavItem(icon: Icons.receipt_outlined,                labelKey: 'dashboard.nav_invoices',  index: 5),
-//  NavItem(icon: Icons.bookmark_border_outlined,        labelKey: 'dashboard.nav_checks',    index: 6),
+  NavItem(icon: Icons.dashboard_outlined,              labelKey: 'dashboard.nav_home',          index: 0),
+  NavItem(icon: Icons.videocam_outlined,               labelKey: 'dashboard.nav_inventory',     index: 1),
+  NavItem(icon: Icons.people_outline,                  labelKey: 'dashboard.nav_customers',     index: 2),
+  NavItem(icon: Icons.all_inbox,                       labelKey: 'dashboard.nav_all_invoices',  index: 3),
+  NavItem(icon: Icons.account_balance_wallet_outlined, labelKey: 'dashboard.nav_finance',       index: 4),
+  NavItem(icon: Icons.local_shipping_outlined,         labelKey: 'dashboard.nav_suppliers',     index: 5),
+  NavItem(icon: Icons.notifications_none_outlined,     labelKey: 'dashboard.nav_alert',         index: 6),
+
 ];
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
@@ -97,10 +102,11 @@ class _DashboardShellState extends State<DashboardShell> {
       di.sl<DashboardCubit>()..load(),            // Index 0
       di.sl<InventoryCubit>()..fetchItems(),      // Index 1
       di.sl<CustomersCubit>()..fetchCustomers(),  // Index 2
-      di.sl<FinanceCubit>()..loadSummary(),       // Index 3
-      di.sl<SuppliersCubit>()..fetchSuppliers(),  // Index 4
-      di.sl<AlertsCubit>()..fetchAlerts(),        // Index 5
-      null, // Checks
+      di.sl<AllInvoicesCubit>()..loadInvoices(),  // Index 3
+      di.sl<FinanceCubit>()..loadSummary(),       // Index 4
+      di.sl<SuppliersCubit>()..fetchSuppliers(),  // Index 5
+      di.sl<AlertsCubit>()..fetchAlerts(),        // Index 6
+
       null, // Suppliers
     ];
   }
@@ -124,15 +130,17 @@ class _DashboardShellState extends State<DashboardShell> {
         ],
         child: const CustomersPage(),
       ),
-      3 => BlocProvider.value(
-        value: _cubits[3] as FinanceCubit,
+      3 => BlocProvider.value(value: _cubits[3] as AllInvoicesCubit, child: const AllInvoicesPage()),
+      4 => BlocProvider.value(
+        value: _cubits[4] as FinanceCubit,
         child: const FinancePage(),
       ),
-      4 => BlocProvider.value(
-        value: _cubits[4] as SuppliersCubit,
+      5 => BlocProvider.value(
+        value: _cubits[5] as SuppliersCubit,
         child: const SuppliersPage(),
       ),
-      5 => BlocProvider.value(value: _cubits[5] as AlertsCubit, child: const AlertsPage()),
+      6 => BlocProvider.value(value: _cubits[6] as AlertsCubit, child: const AlertsPage()),
+
       _ => _ComingSoonPage(index: _selectedIndex),
     };
   }
@@ -243,17 +251,11 @@ class _DesktopLayout extends StatelessWidget {
                   ),
 
                   if (sidebarExpanded)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12.h),
-                      child: Text(
-                        'app.name'.tr(),
-                        style: TextStyle(
-                          color: ColorsManager.primaryColor,
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    CustomLottieIcon(
+                      assetPath: Assets.cameraLotti,
+                      width: 120.w,
+                      height: 120.w,
+                      repeat: true,
                     )
                   else
                     SizedBox(height: 12.h),
@@ -300,14 +302,33 @@ class _ToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: IconButton(
-        icon: Icon(
-          expanded ? Icons.arrow_forward_ios : Icons.arrow_back_ios,
-          size: 14.r,
-        ),
-        onPressed: onTap,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 8.w),
+      child: Row(
+        mainAxisAlignment: expanded
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.center,
+        children: [
+          if (expanded)
+            Flexible(
+              child: Text(
+                'app.name'.tr(),
+                style: TextStyle(
+                  color: ColorsManager.primaryColor,
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          IconButton(
+            icon: Icon(
+              expanded ? Icons.arrow_forward_ios : Icons.arrow_back_ios,
+              size: 12.r,
+            ),
+            onPressed: onTap,
+          ),
+        ],
       ),
     );
   }

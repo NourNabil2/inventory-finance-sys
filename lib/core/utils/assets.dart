@@ -1,11 +1,14 @@
 class Assets {
+  static const String logoApp = 'assets/images/logo.png';
   static const String appBarBg = 'assets/images/appbar_bg.png';
+  static const String appBg = 'assets/images/background.jpg';
 
   // details icons
   static const String doctorIcon = 'assets/icons/doctor_icon.svg';
   static const locationIcon = 'assets/icons/location.svg';
   // icon
   static const String searchBarIcon = 'assets/icons/search-icon.svg';
+  static const String cameraLotti = 'assets/icons/video_camera.json';
   // lotti icon
   static const String favIcon = 'assets/icons/heart_Pop.json';
   // NavBar Icon
