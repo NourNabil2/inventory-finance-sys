@@ -3,7 +3,6 @@
 import 'dart:typed_data';
 
 import 'package:bungee_manage_sys/core/theme/colors.dart';
-import 'package:bungee_manage_sys/core/utils/enums.dart';
 import 'package:bungee_manage_sys/features/all_invoices/domain/entities/all_invoices_entity.dart';
 import 'package:bungee_manage_sys/features/all_invoices/pagination/presentation/cubit/all_invoices_cubit.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_entity.dart';
@@ -171,15 +170,15 @@ class _AllInvoicesExportDialogState extends State<AllInvoicesExportDialog> {
     );
 
     // Column widths
-    sheet.setColumnWidth(0, 18); // رقم الفاتورة
-    sheet.setColumnWidth(1, 28); // العميل
-    sheet.setColumnWidth(2, 16); // الهاتف
-    sheet.setColumnWidth(3, 14); // الحالة
-    sheet.setColumnWidth(4, 16); // الصافي
-    sheet.setColumnWidth(5, 16); // المدفوع
-    sheet.setColumnWidth(6, 16); // المتبقي
-    sheet.setColumnWidth(7, 18); // التاريخ
-
+    sheet.setColumnWidth(0, 18);  // رقم الفاتورة
+    sheet.setColumnWidth(1, 16);  // التاريخ
+    sheet.setColumnWidth(2, 20);  //  اسم العمل
+    sheet.setColumnWidth(3, 20);  //  جهة الإنتاج
+    sheet.setColumnWidth(4, 14);  // الحالة
+    sheet.setColumnWidth(5, 14);  // الإجمالي
+    sheet.setColumnWidth(6, 14);  // الخصم
+    sheet.setColumnWidth(7, 14);  // الصافي
+    sheet.setColumnWidth(8, 40);  // الأصناف
     int row = 0;
 
     // ── Report title ──────────────────────────────────────────────────────
