@@ -64,14 +64,19 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         'discount': invoice.discount,
         'net_total': invoice.netTotal,
         'status': 'active',
+        'invoice_number': invoice.invoiceNumber,
+        // 🚨 تم إضافة الحقول الجديدة هنا عشان تتبعت للسيرفر 🚨
+        if (invoice.jobName != null) 'job_name': invoice.jobName,
+        if (invoice.production != null) 'production': invoice.production,
       };
+
       final itemsList = items.map((i) => {
         'item_id': i.itemId,
-        'qty': i.qty ?? 1,                          // ✅ null-guard
-        'days': i.days ?? 1,                        // ✅ null-guard
-        'price_per_day': i.pricePerDay ?? 0.0,      // ✅ null-guard
-        'item_discount': i.itemDiscount ?? 0.0,     // ✅ null-guard
-        'is_sub_rented': i.isSubRented ?? false,    // ✅ null-guard
+        'qty': i.qty ?? 1,
+        'days': i.days ?? 1,
+        'price_per_day': i.pricePerDay ?? 0.0,
+        'item_discount': i.itemDiscount ?? 0.0,
+        'is_sub_rented': i.isSubRented ?? false,
         'status': 'out',
         if (i.supplierId != null) 'supplier_id': i.supplierId,
         if (i.supplierCost != null) 'supplier_cost': i.supplierCost,
@@ -129,10 +134,13 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
   Future<Either<Failure, void>> editInvoice({
     required String invoiceId,
     required List<InvoiceItemEntity> newItems,
-    required Map<String, Map<String, dynamic>> existingUpdates, // 👈
+    required Map<String, Map<String, dynamic>> existingUpdates,
     required num additionalDebt,
     double? newDiscount,
     required List<InvoiceItemEntity> currentItems,
+    List<String>? deletedItemIds,
+    String? jobName,
+    String? production,
   }) async {
     try {
       final newItemsJson = newItems.map((i) => {
@@ -160,6 +168,9 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         existingUpdates: existingJson,
         additionalDebt:  additionalDebt,
         newDiscount:     newDiscount,
+        jobName:         jobName,
+        production:      production,
+        deletedItemIds:  deletedItemIds,
       );
       return const Right(null);
     } on ServerException catch (e) {
