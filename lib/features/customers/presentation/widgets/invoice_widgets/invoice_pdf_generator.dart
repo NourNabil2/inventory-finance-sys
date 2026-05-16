@@ -19,8 +19,6 @@ const _kPrimary   = PdfColor(0.10, 0.20, 0.50);
 const _kPrimaryBg = PdfColor(0.95, 0.96, 0.99);
 const _kSuccess   = PdfColor(0.06, 0.62, 0.35);
 const _kSuccessBg = PdfColor(0.94, 1.00, 0.96);
-const _kWarning   = PdfColor(0.60, 0.30, 0.00);
-const _kWarningBg = PdfColor(1.00, 0.97, 0.88);
 const _kDanger    = PdfColor(0.80, 0.10, 0.10);
 const _kGrey100   = PdfColor(0.97, 0.97, 0.97);
 const _kGrey200   = PdfColor(0.90, 0.90, 0.90);
@@ -437,7 +435,7 @@ class InvoicePdfGenerator {
           pw.Container(width: 0.6, height: 28, color: _kGrey200),
 
           // Net Total (Gross - Item Disc - Inv Disc)
-          _compactStat('Net Total', '${_f(invoice.netTotal)} $cur', sTotal, sSm),
+          _compactStat('Net Total', '${_f(invoice.netTotal)} $cur', sBase, sSm),
 
           // Divider
           pw.Container(width: 0.6, height: 28, color: _kGrey200),
