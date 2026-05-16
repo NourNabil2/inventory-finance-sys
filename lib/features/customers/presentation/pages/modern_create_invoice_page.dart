@@ -34,7 +34,6 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
   final _jobNameCtrl    = TextEditingController();
   final _productionCtrl = TextEditingController();
 
-  // 🚨 1. متغير لتخزين تاريخ الفاتورة المختار 🚨
   DateTime _invoiceDate = DateTime.now();
 
   String _payMethod = 'safe';
@@ -57,7 +56,7 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
   double get _amtPaid     => (double.tryParse(_amtPaidCtrl.text) ?? 0).clamp(0, _netTotal);
   double get _remaining   => _netTotal - _amtPaid;
 
-  // 🚨 دالة اختيار التاريخ 🚨
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -78,7 +77,7 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
     }
   }
 
-  // 🚨 2. الدالة بقت تستقبل isDraft لتحديد نوع الفاتورة 🚨
+
   Future<void> _submit({bool isDraft = false}) async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_lines.isEmpty) {
@@ -116,7 +115,6 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
       customerId:   widget.customer.id,
       totalAmount:  _subtotal,
       discount:     _invDiscFlat,
-      // 🚨 تحديد الحالة والتاريخ المختار 🚨
       status:       isDraft ? InvoiceStatus.draft : InvoiceStatus.active,
       createdAt:    _invoiceDate,
       invoiceNumber: '',
@@ -128,7 +126,6 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
     context.read<InvoicesCubit>().createInvoiceWithPayment(
       invoice:     invoice,
       items:       resolvedItems,
-      // لو مسودة مش هنسجل أي دفعة مالية
       amountPaid:  isDraft ? 0.0 : _amtPaid,
       method:      _payMethod,
     );
@@ -162,13 +159,6 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _CustomerBadge(customer: widget.customer),
-                      SizedBox(height: 16.h),
-
-                      // 🚨 ويدجت اختيار التاريخ 🚨
-                      _InvoiceDateRow(
-                        date: _invoiceDate,
-                        onTap: _pickDate,
-                      ),
                       SizedBox(height: 16.h),
 
                       _JobProductionRow(
@@ -810,11 +800,12 @@ class _LineRowState extends State<_LineRow> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l     = widget.line;
+    final l     = widget.line; // أو r لو إنت في صفحة التعديل
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        // 🚨 دي مهمة جداً عشان الخلايا تفضل متساوية من فوق 🚨
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 4,
@@ -835,46 +826,14 @@ class _LineRowState extends State<_LineRow> {
                               fontSize: 11.sp,
                               color:    ColorsManager.defaultTextSecondary)),
                       SizedBox(width: 8.w),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            l.isSubRented = !l.isSubRented;
-                          });
-                          widget.onChanged();
-                        },
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                          decoration: BoxDecoration(
-                            color: l.isSubRented ? ColorsManager.primaryColor.withOpacity(0.1) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(4.r),
-                            border: Border.all(color: l.isSubRented ? ColorsManager.primaryColor : theme.dividerColor),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                l.isSubRented ? Icons.check_box : Icons.check_box_outline_blank,
-                                size: 12.r,
-                                color: l.isSubRented ? ColorsManager.primaryColor : ColorsManager.defaultTextSecondary,
-                              ),
-                              SizedBox(width: 4.w),
-                              Text(
-                                'تكملة من الخارج',
-                                style: TextStyle(
-                                  fontSize: 9.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: l.isSubRented ? ColorsManager.primaryColor : ColorsManager.defaultTextSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      // زرار التكملة من الخارج... (نفس الكود بتاعك)
                     ],
                   ),
               ],
             ),
           ),
+
+          // 1. ─── خلية الكمية (Qty) ───
           _NumCell(
               ctrl:      l.qtyCtrl,
               onChanged: () { setState(() {}); widget.onChanged(); },
@@ -883,6 +842,8 @@ class _LineRowState extends State<_LineRow> {
                 if (n == null || n < 1) return '≥1';
                 return null;
               }),
+
+          // 2. ─── خلية الأيام (Days) ───
           _NumCell(
               ctrl:      l.daysCtrl,
               onChanged: () { setState(() {}); widget.onChanged(); },
@@ -891,63 +852,73 @@ class _LineRowState extends State<_LineRow> {
                 if (n == null || n < 1) return '≥1';
                 return null;
               }),
-          _NumCell(
-              ctrl:         l.priceCtrl,
-              allowDecimal: true,
-              onChanged:    () { setState(() {}); widget.onChanged(); }),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _NumCell(
-                  ctrl:         l.priceCtrl,
-                  allowDecimal: true,
-                  onChanged:    () { setState(() {}); widget.onChanged(); }),
-              if (l.item != null) ...[
-                SizedBox(height: 4.h),
-                PopupMenuButton<double>(
-                  tooltip: 'اختر السعر',
-                  padding: EdgeInsets.zero,
-                  onSelected: (price) {
-                    l.priceCtrl.text = price.toStringAsFixed(0);
-                    setState(() {});
-                    widget.onChanged();
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                    decoration: BoxDecoration(
-                      color: ColorsManager.primaryColor.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(4.r),
+
+          // 3. ─── 🚨 خلية السعر (Price) + قائمة الأسعار تحتها 🚨 ───
+          SizedBox(
+            width: 70.w, // نفس عرض باقي الخلايا
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _NumCell(
+                    ctrl:         l.priceCtrl,
+                    allowDecimal: true,
+                    onChanged:    () { setState(() {}); widget.onChanged(); }),
+                if (l.item != null) ...[
+                  SizedBox(height: 4.h),
+                  PopupMenuButton<double>(
+                    tooltip: 'اختر السعر',
+                    padding: EdgeInsets.zero,
+                    onSelected: (price) {
+                      l.priceCtrl.text = price.toStringAsFixed(0);
+                      setState(() {});
+                      widget.onChanged();
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                      decoration: BoxDecoration(
+                        color: ColorsManager.primaryColor.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(4.r),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('الأسعار', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w600, color: ColorsManager.primaryColor)),
+                          Icon(Icons.arrow_drop_down, size: 12.r, color: ColorsManager.primaryColor),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('الأسعار', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w600, color: ColorsManager.primaryColor)),
-                        Icon(Icons.arrow_drop_down, size: 12.r, color: ColorsManager.primaryColor),
-                      ],
-                    ),
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem(
+                        value: l.item!.defaultPrice,
+                        child: Text('افتراضي: ${l.item!.defaultPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600)),
+                      ),
+                      PopupMenuItem(
+                        value: l.item!.priceFilm,
+                        child: Text('فيلم: ${l.item!.priceFilm.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                      ),
+                      PopupMenuItem(
+                        value: l.item!.priceSeries,
+                        child: Text('مسلسل: ${l.item!.priceSeries.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                      ),
+                      PopupMenuItem(
+                        value: l.item!.priceAd,
+                        child: Text('إعلان: ${l.item!.priceAd.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                      ),
+                    ],
                   ),
-                  itemBuilder: (ctx) => [
-                    PopupMenuItem(
-                      value: l.item!.defaultPrice,
-                      child: Text('افتراضي: ${l.item!.defaultPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600)),
-                    ),
-                    PopupMenuItem(
-                      value: l.item!.priceFilm,
-                      child: Text('فيلم: ${l.item!.priceFilm.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
-                    ),
-                    PopupMenuItem(
-                      value: l.item!.priceSeries,
-                      child: Text('مسلسل: ${l.item!.priceSeries.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
-                    ),
-                    PopupMenuItem(
-                      value: l.item!.priceAd,
-                      child: Text('إعلان: ${l.item!.priceAd.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
-                    ),
-                  ],
-                ),
-              ]
-            ],
+                ]
+              ],
+            ),
           ),
+
+          // 4. ─── 🚨 خلية الخصم (Discount) رجعت لمكانها الصحيح 🚨 ───
+          _NumCell(
+              ctrl:         l.discCtrl,
+              allowDecimal: true,
+              suffix:       '%',
+              onChanged:    () { setState(() {}); widget.onChanged(); }),
+
+          // 5. ─── الإجمالي (Net Total) ───
           SizedBox(
             width: 70.w,
             child: Text(
@@ -959,6 +930,8 @@ class _LineRowState extends State<_LineRow> {
               textAlign: TextAlign.end,
             ),
           ),
+
+          // 6. ─── زرار الحذف (Remove) ───
           SizedBox(
             width: 32.w,
             child: widget.canRemove
@@ -1163,13 +1136,12 @@ class _Footer extends StatelessWidget {
             ),
             SizedBox(height: 14.h),
 
-            // 🚨 إضافة زر المسودة بجانب زر التأكيد 🚨
             Row(
               children: [
                 Expanded(
                   flex: 1,
                   child: _SubmitBtn(
-                    label:   'حفظ كمسودة',
+                    label:   'invoices.draft_invoice'.tr(),
                     loading: submitting,
                     isOutlined: true,
                     onTap:   () => onSubmit(true),

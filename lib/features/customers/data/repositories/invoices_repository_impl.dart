@@ -63,9 +63,8 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         'total_amount': invoice.totalAmount,
         'discount': invoice.discount,
         'net_total': invoice.netTotal,
-        'status': 'active',
+        'status': invoice.status == InvoiceStatus.draft ? 'draft' : 'active',
         'invoice_number': invoice.invoiceNumber,
-        // 🚨 تم إضافة الحقول الجديدة هنا عشان تتبعت للسيرفر 🚨
         if (invoice.jobName != null) 'job_name': invoice.jobName,
         if (invoice.production != null) 'production': invoice.production,
       };
@@ -138,6 +137,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     double? newDiscount,
     required List<InvoiceItemEntity> currentItems,
     List<String>? deletedItemIds,
+    String? newStatus,
     String? jobName,
     String? production,
   }) async {
@@ -168,6 +168,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         newDiscount:     newDiscount,
         jobName:         jobName,
         production:      production,
+        newStatus:       newStatus,
         deletedItemIds:  deletedItemIds,
       );
       return const Right(null);

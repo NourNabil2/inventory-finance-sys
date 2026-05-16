@@ -40,7 +40,7 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
   late InvoiceEntity   _invoice;
   late CustomerEntity  _customer;
   InvoicePaymentSummary? _paymentSummary;
-
+  bool _isActivating = false;
   final Set<String> _returningIds = {};
 
   @override
@@ -65,6 +65,74 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
     final cubit = context.read<InvoicesCubit>();
     cubit.returnSingleItem(
         invoiceItemId: item.id, invoiceId: _invoice.id, qty: qty);
+  }
+
+  // ───  بانر تفعيل المسودة ─────────────────────────
+  Widget _buildDraftActivationBanner(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+      decoration: BoxDecoration(
+        color: ColorsManager.warningSurface,
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: ColorsManager.warningFill.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: ColorsManager.warningText, size: 20.r),
+              SizedBox(width: 8.w),
+              Text(
+                'هذه الفاتورة مسودة (Draft)',
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.bold,
+                  color: ColorsManager.warningText,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'لم يتم تسجيل قيمتها في حساب العميل ولن تظهر في حسابات الخزنة. قم باعتماد الفاتورة لتسجيلها مالياً بتاريخ اليوم.',
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w500,
+              color: ColorsManager.warningText.withOpacity(0.9),
+            ),
+          ),
+          SizedBox(height: 16.h),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ColorsManager.primaryColor,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.r)),
+                elevation: 0,
+              ),
+              // 🚨 عرض أنيميشن التحميل بدلاً من الأيقونة أثناء المعالجة 🚨
+              icon: _isActivating
+                  ? SizedBox(width: 18.r, height: 18.r, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Icon(Icons.check_circle_outline, size: 20.r),
+              label: Text(
+                  _isActivating ? 'جاري الاعتماد وتحديث الحسابات...' : 'اعتماد وتفعيل الفاتورة',
+                  style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700)
+              ),
+              // 🚨 منع الضغط أثناء التحميل 🚨
+              onPressed: _isActivating ? null : () async {
+                setState(() => _isActivating = true); // تشغيل اللودينج
+                context.read<InvoicesCubit>().updateStatus(_invoice.id, InvoiceStatus.active, _invoice.customerId);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showPaymentDialog() {
@@ -141,6 +209,12 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
     final hasJobData = (_invoice.jobName != null && _invoice.jobName!.isNotEmpty) ||
         (_invoice.production != null && _invoice.production!.isNotEmpty);
 
+    double paidAmount = 0;
+    if (_paymentSummary != null) {
+      paidAmount = _paymentSummary!.totalPaid;
+    }
+    final hasPayments = paidAmount > 0;
+
     return BlocListener<InvoicesCubit, InvoicesState>(
       listener: (context, state) {
         if (state is InvoicesLoaded) {
@@ -150,6 +224,7 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
               _invoice        = state.selectedInvoice!;
               _paymentSummary = state.paymentSummary ?? _paymentSummary;
               _returningIds.clear();
+              _isActivating   = false;
             });
           }
         } else if (state is PaymentRecorded) {
@@ -159,7 +234,10 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
           setState(() => _returningIds.remove(state.invoiceItemId));
           context.showSuccess('invoices.item_returned'.tr());
         } else if (state is InvoicesError) {
-          setState(() => _returningIds.clear());
+          setState(() {
+            _returningIds.clear();
+            _isActivating = false;
+          });
           context.showError(state.message);
         }
       },
@@ -189,7 +267,11 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
                                 invoice: _invoice, customer: _customer),
                             SizedBox(height: 16.h),
 
-                            // 🚨 إضافة كارت بيانات العمل والإنتاج هنا 🚨
+                            if (_invoice.status == InvoiceStatus.draft && !hasPayments) ...[
+                              _buildDraftActivationBanner(theme),
+                              SizedBox(height: 16.h),
+                            ],
+
                             if (hasJobData) ...[
                               _JobProductionInfoCard(invoice: _invoice),
                               SizedBox(height: 16.h),
@@ -385,3 +467,4 @@ class _JobProductionInfoCard extends StatelessWidget {
     );
   }
 }
+

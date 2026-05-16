@@ -33,6 +33,7 @@ abstract class InvoicesRemoteDataSource {
     required List<Map<String, dynamic>> existingUpdates,
     List<String>? deletedItemIds,
     double? newDiscount,
+    String? newStatus,
     String? jobName,
     String? production,
   });
@@ -147,6 +148,7 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
     required List<Map<String, dynamic>> existingUpdates,
     List<String>? deletedItemIds,
     double? newDiscount,
+    String? newStatus,
     String? jobName,
     String? production,
   }) async {
@@ -159,6 +161,7 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
       if (newDiscount != null) params['p_new_discount'] = newDiscount;
       if (jobName != null) params['p_job_name'] = jobName;
       if (production != null) params['p_production'] = production;
+      if (newStatus != null) params['p_new_status'] = newStatus;
       if (deletedItemIds != null && deletedItemIds.isNotEmpty) {
         params['p_deleted_item_ids'] = deletedItemIds;
       }
@@ -171,10 +174,10 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
   @override
   Future<void> updateInvoiceStatus(String invoiceId, String status) async {
     try {
-      await _supabase
-          .from('invoices')
-          .update({'status': status})
-          .eq('id', invoiceId);
+      await _supabase.rpc('change_invoice_status', params: {
+        'p_invoice_id': invoiceId,
+        'p_new_status': status,
+      });
     } catch (e, st) {
       throw ErrorHandler.handleException(e, st);
     }

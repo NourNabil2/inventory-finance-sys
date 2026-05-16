@@ -428,7 +428,7 @@ class InvoiceActionBar extends StatelessWidget {
     final theme       = Theme.of(context);
     final remaining   = paymentSummary?.remaining ?? invoice.netTotal;
     final isFullyPaid = paymentSummary?.isFullyPaid ?? false;
-    final isActive    = invoice.isActive;
+    final isActive    = invoice.status == InvoiceStatus.active ||  invoice.status == InvoiceStatus.draft;
 
     return Container(
       decoration: BoxDecoration(

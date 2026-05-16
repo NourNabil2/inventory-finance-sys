@@ -177,6 +177,7 @@ class InvoicesCubit extends Cubit<InvoicesState> {
     required Map<String, Map<String, dynamic>> modifiedItems,
     double? newDiscountFlat,
     List<String>? deletedItemIds,
+    String? newStatus,
     String? jobName,
     String? production,
   }) async {
@@ -212,6 +213,7 @@ class InvoicesCubit extends Cubit<InvoicesState> {
       currentItems:    originalInvoice.items,
       deletedItemIds:  deletedItemIds,
       jobName: jobName,
+      newStatus:       newStatus,
       production: production,
     );
 
@@ -237,7 +239,10 @@ class InvoicesCubit extends Cubit<InvoicesState> {
     await _repository.updateStatus(invoiceId, status, customerId);
     result.fold(
           (f) => emit(InvoicesError(f.message)),
-          (_) => fetchInvoices(customerId),
+          (_) async {
+        await selectInvoice(invoiceId);
+        fetchInvoices(customerId);
+      },
     );
   }
 

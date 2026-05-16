@@ -167,6 +167,7 @@
     "create_invoice": "إنشاء فاتورة",
     "edit_invoice": "تعديل الفاتورة",
     "confirm_invoice": "تأكيد الفاتورة",
+    "draft_invoice": "حفظ كمسودة",
     "save_edit": "حفظ التعديلات",
     "items": "الأصناف",
     "items_count": "إجمالي الأصناف",

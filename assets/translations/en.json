@@ -161,6 +161,7 @@
     "invoice_number": "Invoice #{id}",
     "invoice_details": "Invoice Details",
     "invoices_history": "Invoice History",
+    "draft_invoice": "Save as draft",
     "create_invoice": "Create Invoice",
     "edit_invoice": "Edit Invoice",
     "confirm_invoice": "Confirm Invoice",

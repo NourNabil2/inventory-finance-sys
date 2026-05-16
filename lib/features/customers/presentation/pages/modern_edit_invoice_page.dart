@@ -39,17 +39,16 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
   late final TextEditingController _productionCtrl;
 
   bool _submitting = false;
+  late bool _isDraft;
 
   @override
   void initState() {
     super.initState();
     _discCtrl = TextEditingController(
         text: widget.invoice.discountPercent.toStringAsFixed(1));
-
-    // 🚨 تحميل البيانات القديمة لو موجودة 🚨
     _jobNameCtrl = TextEditingController(text: widget.invoice.jobName ?? '');
     _productionCtrl = TextEditingController(text: widget.invoice.production ?? '');
-
+    _isDraft = widget.invoice.status == InvoiceStatus.draft;
     _existing = widget.invoice.items
         .where((i) => i.isOut)
         .map(_ExistingRow.new)
@@ -92,21 +91,26 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
       return;
     }
 
+    setState(() => _submitting = true);
+
+    if (!mounted) return;
+
     final isAdmin = context.read<UserCubit>().isAdmin;
+    final canEditAll = isAdmin || _isDraft;
 
     final modifiedItems = <String, Map<String, dynamic>>{};
     for (final r in _existing) {
       final daysChanged  = r.days != r.original.days;
-      final qtyChanged   = isAdmin && r.qty != r.original.qty;
-      final priceChanged = isAdmin && r.pricePerDay != r.original.pricePerDay;
-      final discChanged  = isAdmin && r.flatDiscount != r.original.itemDiscount;
+      final qtyChanged   = canEditAll && r.qty != r.original.qty;
+      final priceChanged = canEditAll && r.pricePerDay != r.original.pricePerDay;
+      final discChanged  = canEditAll && r.flatDiscount != r.original.itemDiscount;
 
       if (daysChanged || qtyChanged || priceChanged || discChanged) {
         modifiedItems[r.original.id] = {
           'days':         r.days,
-          'qty':          isAdmin ? r.qty          : r.original.qty,
-          'pricePerDay':  isAdmin ? r.pricePerDay  : r.original.pricePerDay,
-          'flatDiscount': isAdmin ? r.flatDiscount : r.original.itemDiscount,
+          'qty':          canEditAll ? r.qty          : r.original.qty,
+          'pricePerDay':  canEditAll ? r.pricePerDay  : r.original.pricePerDay,
+          'flatDiscount': canEditAll ? r.flatDiscount : r.original.itemDiscount,
         };
       }
     }
@@ -128,9 +132,6 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
     final pct         = (double.tryParse(_discCtrl.text) ?? 0).clamp(0, 100);
     final newDiscFlat = (_existingSubtotal() + _newSubtotal()) * (pct / 100);
 
-    setState(() => _submitting = true);
-    if (!mounted) return;
-
     context.read<InvoicesCubit>().editInvoice(
       invoiceId:       widget.invoice.id,
       originalInvoice: widget.invoice,
@@ -140,12 +141,19 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
       deletedItemIds:  _deletedItemIds,
       jobName:         _jobNameCtrl.text.trim().isEmpty ? null : _jobNameCtrl.text.trim(),
       production:      _productionCtrl.text.trim().isEmpty ? null : _productionCtrl.text.trim(),
+      newStatus:       _isDraft ? 'draft' : 'active',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    double paidAmount = 0;
+    final cubitState = context.read<InvoicesCubit>().state;
+    if (cubitState is InvoicesLoaded && cubitState.paymentSummary != null) {
+      paidAmount = cubitState.paymentSummary!.totalPaid;
+    }
+    final hasPayments = paidAmount > 0;
     return BlocProvider(
       create: (_) => di.sl<InventoryCubit>()..fetchItems(),
       child: BlocListener<InvoicesCubit, InvoicesState>(
@@ -177,9 +185,58 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
                           productionCtrl: _productionCtrl,
                         ),
                         SizedBox(height: 24.h),
+                        if (!hasPayments) ...[
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(8.r),
+                              border: Border.all(color: _isDraft ? ColorsManager.warningFill.withOpacity(0.3) : ColorsManager.primaryColor.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isDraft ? Icons.drafts_outlined : Icons.check_circle_outline,
+                                  color: _isDraft ? ColorsManager.warningText : ColorsManager.successText,
+                                  size: 20.r,
+                                ),
+                                SizedBox(width: 12.w),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _isDraft ? 'وضع الفاتورة: مسودة (Draft)' : 'وضع الفاتورة: معتمدة ونشطة (Active)',
+                                        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold),
+                                      ),
+                                      Text(
+                                        _isDraft ? 'معزولة ماليًا ولا تدخل في حساب مديونية العميل.' : 'محتسبة رسميًا وتؤثر على مديونية العميل الحالية.',
+                                        style: TextStyle(fontSize: 11.sp, color: ColorsManager.defaultTextSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch.adaptive(
+                                  activeColor: ColorsManager.primaryColor,
+                                  activeTrackColor: ColorsManager.primaryColor.withOpacity(0.2),
+                                  inactiveThumbColor: ColorsManager.warningFill,
+                                  inactiveTrackColor: ColorsManager.warningSurface,
+                                  value: _isDraft,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _isDraft = value;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 24.h),
+                        ],
 
                         _ExistingItemsSection(
                           rows: _existing,
+                          isDraft: widget.invoice.status == InvoiceStatus.draft,
                           onRemove: (index) {
                             setState(() {
                               _deletedItemIds.add(_existing[index].original.id);
@@ -224,10 +281,12 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
               _EditFooter(
                 oldNet: _oldNet,
                 newNet: _newNet,
-                // additionalDebt: _additionalDebt,
                 submitting: _submitting,
                 hPad: _hPad,
                 onSubmit: _submit,
+                isDraft: widget.invoice.status == InvoiceStatus.draft,
+                invoiceId: widget.invoice.id,
+                customerId: widget.customer.id,
               ),
             ],
           ),
@@ -339,12 +398,14 @@ class _JobProductionRow extends StatelessWidget {
 class _ExistingItemsSection extends StatelessWidget {
   final List<_ExistingRow> rows;
   final VoidCallback onChanged;
-  final void Function(int) onRemove; // 🚨 أضفنا دي
+  final bool isDraft;
+  final void Function(int) onRemove;
 
   const _ExistingItemsSection({
     required this.rows,
     required this.onChanged,
     required this.onRemove,
+    required this.isDraft,
   });
 
   @override
@@ -374,7 +435,8 @@ class _ExistingItemsSection extends StatelessWidget {
                   _ExistingRowWidget(
                     row: e.value,
                     onChanged: onChanged,
-                    onRemove: () => onRemove(e.key), // 🚨 ربطنا الحذف
+                    isDraft: isDraft,
+                    onRemove: () => onRemove(e.key),
                   ),
                 ])),
               ],
@@ -415,12 +477,14 @@ class _ExistingHeader extends StatelessWidget {
 class _ExistingRowWidget extends StatefulWidget {
   final _ExistingRow row;
   final VoidCallback onChanged;
-  final VoidCallback onRemove; // 🚨 استقبال حدث الحذف
+  final VoidCallback onRemove;
+  final bool isDraft;
 
   const _ExistingRowWidget({
     required this.row,
     required this.onChanged,
     required this.onRemove,
+    required this.isDraft,
   });
 
   @override
@@ -433,7 +497,9 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
     final theme   = Theme.of(context);
     final r       = widget.row;
     final isAdmin = context.read<UserCubit>().isAdmin;
+    final canEditAll = isAdmin || widget.isDraft;
     final isExtended = r.days > r.original.days;
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
       color: theme.cardColor,
@@ -457,7 +523,7 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
               ],
             ),
           ),
-          isAdmin
+          canEditAll
               ? _EditableCell(ctrl: r.qtyCtrl, onChanged: widget.onChanged,
               validator: (v) {
                 final n = int.tryParse(v ?? '');
@@ -468,6 +534,7 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
             width: 70.w,
             child: TextFormField(
               controller: r.daysCtrl,
+              enabled: canEditAll,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -483,10 +550,10 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
               },
             ),
           ),
-          isAdmin
+          canEditAll
               ? _EditableCell(ctrl: r.priceCtrl, allowDecimal: true, onChanged: widget.onChanged)
               : _LockedCell(r.original.pricePerDay.toStringAsFixed(0)),
-          isAdmin
+          canEditAll
               ? _EditableCell(ctrl: r.discCtrl, allowDecimal: true, suffix: '%', onChanged: widget.onChanged,
               validator: (v) {
                 final n = double.tryParse(v ?? '');
@@ -907,13 +974,20 @@ class _EditFooter extends StatelessWidget {
   final bool submitting;
   final double hPad;
   final VoidCallback onSubmit;
+  final bool isDraft;
+  final String invoiceId;
+  final String customerId;
 
-  const _EditFooter(
-      {required this.oldNet,
-        required this.newNet,
-        required this.submitting,
-        required this.hPad,
-        required this.onSubmit});
+  const _EditFooter({
+    required this.oldNet,
+    required this.newNet,
+    required this.submitting,
+    required this.hPad,
+    required this.onSubmit,
+    required this.isDraft,
+    required this.invoiceId,
+    required this.customerId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -936,13 +1010,10 @@ class _EditFooter extends StatelessWidget {
                 _TLine('invoices.new_net'.tr(),
                     '$cur ${newNet.toStringAsFixed(0)}',
                     bold: true),
-                // if (additionalDebt > 0)
-                //   _TLine('invoices.additional_debt'.tr(),
-                //       '+$cur ${additionalDebt.toStringAsFixed(0)}',
-                //       col: ColorsManager.errorText),
               ],
             ),
             const Spacer(),
+
             _SubmitBtn(
               label: 'invoices.save_edit'.tr(),
               loading: submitting,

@@ -62,6 +62,7 @@ abstract class InvoicesRepository {
     List<String>? deletedItemIds,
     String? jobName,
     String? production,
+    String? newStatus,
     required List<InvoiceItemEntity> currentItems,
   });
   /// Update invoice status
