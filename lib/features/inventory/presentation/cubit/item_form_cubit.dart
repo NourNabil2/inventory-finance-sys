@@ -20,12 +20,15 @@ class ItemFormCubit extends Cubit<ItemFormState> {
     required String name,
     String? model,
     required double defaultPrice,
+    double priceFilm = 0,
+    double priceSeries = 0,
+    double priceAd = 0,
     required int totalQty,
     required int availableQty,
     required ItemStatus status,
     String? categoryId,
     String? existingImageUrl,
-    File? newImageFile,          // ← جديد
+    File? newImageFile,
   }) async {
     emit(ItemFormLoading());
 
@@ -51,6 +54,9 @@ class ItemFormCubit extends Cubit<ItemFormState> {
       name:         name.trim(),
       model:        model?.trim(),
       defaultPrice: defaultPrice,
+      priceFilm:    priceFilm,
+      priceSeries:  priceSeries,
+      priceAd:      priceAd,
       totalQty:     totalQty,
       availableQty: availableQty,
       status:       status,

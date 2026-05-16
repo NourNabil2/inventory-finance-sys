@@ -31,8 +31,10 @@ abstract class InvoicesRemoteDataSource {
     required String invoiceId,
     required List<Map<String, dynamic>> newItems,
     required List<Map<String, dynamic>> existingUpdates,
-    required num additionalDebt,
+    List<String>? deletedItemIds,
     double? newDiscount,
+    String? jobName,
+    String? production,
   });
 
   Future<void> updateInvoiceStatus(String invoiceId, String status);
@@ -57,6 +59,7 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
           .select('''
             id, customer_id, created_by, invoice_number,
             total_amount, discount, status, created_at,
+            job_name, production,
             invoice_items(id, qty, returned_qty, status)
           ''')
           .eq('customer_id', customerId)
@@ -142,17 +145,23 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
     required String invoiceId,
     required List<Map<String, dynamic>> newItems,
     required List<Map<String, dynamic>> existingUpdates,
-    required num additionalDebt,
+    List<String>? deletedItemIds,
     double? newDiscount,
+    String? jobName,
+    String? production,
   }) async {
     try {
       final params = <String, dynamic>{
         'p_invoice_id': invoiceId,
         'p_new_items': newItems,
         'p_existing_updates': existingUpdates,
-        'p_additional_debt': additionalDebt,
       };
       if (newDiscount != null) params['p_new_discount'] = newDiscount;
+      if (jobName != null) params['p_job_name'] = jobName;
+      if (production != null) params['p_production'] = production;
+      if (deletedItemIds != null && deletedItemIds.isNotEmpty) {
+        params['p_deleted_item_ids'] = deletedItemIds;
+      }
       await _supabase.rpc('edit_invoice_transaction', params: params);
     } catch (e, st) {
       throw ErrorHandler.handleException(e, st);

@@ -8,6 +8,7 @@ import 'package:bungee_manage_sys/core/widgets/app_image_picker.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:bungee_manage_sys/core/di/injection_container.dart' as di;
 import 'package:bungee_manage_sys/core/utils/app_size.dart';
@@ -54,6 +55,11 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   final _totalQtyCtrl = TextEditingController();
   final _availQtyCtrl = TextEditingController();
 
+  // 🚨 تعريف Controllers الأسعار الجديدة 🚨
+  late TextEditingController _priceFilmCtrl;
+  late TextEditingController _priceSeriesCtrl;
+  late TextEditingController _priceAdCtrl;
+
   late ItemStatus _selectedStatus;
   String? _selectedCategoryId;
   File? _pickedImage;
@@ -67,6 +73,12 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
   void initState() {
     super.initState();
     final item = widget.initialItem;
+
+    // 🚨 تهيئة Controllers الأسعار الجديدة 🚨
+    _priceFilmCtrl   = TextEditingController(text: item?.priceFilm.toStringAsFixed(0) ?? '0');
+    _priceSeriesCtrl = TextEditingController(text: item?.priceSeries.toStringAsFixed(0) ?? '0');
+    _priceAdCtrl     = TextEditingController(text: item?.priceAd.toStringAsFixed(0) ?? '0');
+
     if (item != null) {
       _nameCtrl.text      = item.name;
       _modelCtrl.text     = item.model ?? '';
@@ -87,6 +99,10 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
     _priceCtrl.dispose();
     _totalQtyCtrl.dispose();
     _availQtyCtrl.dispose();
+    // 🚨 عمل dispose عشان الميموري 🚨
+    _priceFilmCtrl.dispose();
+    _priceSeriesCtrl.dispose();
+    _priceAdCtrl.dispose();
     super.dispose();
   }
 
@@ -107,6 +123,10 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
       name:             _nameCtrl.text,
       model:            _modelCtrl.text.isEmpty ? null : _modelCtrl.text,
       defaultPrice:     double.parse(_priceCtrl.text),
+      // 🚨 إرسال الأسعار الجديدة للكيوبت 🚨
+      priceFilm:        double.tryParse(_priceFilmCtrl.text) ?? 0,
+      priceSeries:      double.tryParse(_priceSeriesCtrl.text) ?? 0,
+      priceAd:          double.tryParse(_priceAdCtrl.text) ?? 0,
       totalQty:         int.parse(_totalQtyCtrl.text),
       availableQty:     int.parse(_availQtyCtrl.text),
       status:           _selectedStatus,
@@ -174,7 +194,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
                 SizedBox(height: _v.s16),
 
                 // ── Name ─────────────────────────────────
-                AppTextFieldFactory.email(
+                AppTextFieldFactory.email( // مجرد اسم دالة بس هي بتطلع نص عادي مفيش مشكلة
                   controller: _nameCtrl,
                   title: 'inventory.field_name'.tr(),
                   hintText: 'inventory.field_name_hint'.tr(),
@@ -231,6 +251,44 @@ class _ItemFormDialogState extends State<ItemFormDialog> {
                     }
                     return null;
                   },
+                ),
+
+                SizedBox(height: _v.s12),
+
+                // 🚨 ── أسعار العمل (فيلم - مسلسل - إعلان) ── 🚨
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: _v.s8),
+                  child: Text('أسعار العمل (اختياري)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp)),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppTextFieldFactory.number(
+                        controller: _priceFilmCtrl,
+                        title: 'سعر الفيلم',
+                        hintText: '0',
+                        allowDecimal: true,
+                      ),
+                    ),
+                    SizedBox(width: _h.s12),
+                    Expanded(
+                      child: AppTextFieldFactory.number(
+                        controller: _priceSeriesCtrl,
+                        title: 'سعر المسلسل',
+                        hintText: '0',
+                        allowDecimal: true,
+                      ),
+                    ),
+                    SizedBox(width: _h.s12),
+                    Expanded(
+                      child: AppTextFieldFactory.number(
+                        controller: _priceAdCtrl,
+                        title: 'سعر الإعلان',
+                        hintText: '0',
+                        allowDecimal: true,
+                      ),
+                    ),
+                  ],
                 ),
 
                 SizedBox(height: _v.s12),

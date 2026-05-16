@@ -57,9 +57,11 @@ abstract class InvoicesRepository {
   Future<Either<Failure, void>> editInvoice({
     required String invoiceId,
     required List<InvoiceItemEntity> newItems,
-    required num additionalDebt,
     required Map<String, Map<String, dynamic>> existingUpdates,
     double? newDiscount,
+    List<String>? deletedItemIds,
+    String? jobName,
+    String? production,
     required List<InvoiceItemEntity> currentItems,
   });
   /// Update invoice status

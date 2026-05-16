@@ -137,6 +137,10 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // 🚨 متغير للتحقق هل الفاتورة فيها (اسم عمل أو إنتاج) 🚨
+    final hasJobData = (_invoice.jobName != null && _invoice.jobName!.isNotEmpty) ||
+        (_invoice.production != null && _invoice.production!.isNotEmpty);
+
     return BlocListener<InvoicesCubit, InvoicesState>(
       listener: (context, state) {
         if (state is InvoicesLoaded) {
@@ -184,6 +188,13 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
                             InvoiceHeaderCard(
                                 invoice: _invoice, customer: _customer),
                             SizedBox(height: 16.h),
+
+                            // 🚨 إضافة كارت بيانات العمل والإنتاج هنا 🚨
+                            if (hasJobData) ...[
+                              _JobProductionInfoCard(invoice: _invoice),
+                              SizedBox(height: 16.h),
+                            ],
+
                             if (_paymentSummary != null)
                               InvoicePaymentCard(summary: _paymentSummary!),
                             SizedBox(height: 16.h),
@@ -287,3 +298,90 @@ String _statusLabel(InvoiceStatus s) => switch (s) {
   InvoiceStatus.completed => 'invoices.status_completed',
   InvoiceStatus.canceled  => 'invoices.status_canceled',
 };
+
+// ─── 🚨 الكارت الجديد المخصص لعرض اسم العمل وجهة الإنتاج 🚨 ─────────────────────────
+
+class _JobProductionInfoCard extends StatelessWidget {
+  final InvoiceEntity invoice;
+
+  const _JobProductionInfoCard({required this.invoice});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasJob = invoice.jobName != null && invoice.jobName!.isNotEmpty;
+    final hasProd = invoice.production != null && invoice.production!.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasJob)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'invoices.job_name'.tr(), // يتم قراءتها من ملف الترجمة
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w500,
+                      color: ColorsManager.defaultTextSecondary,
+                    ),
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    invoice.jobName!,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (hasJob && hasProd)
+            Container(
+              height: 36.h,
+              width: 1,
+              color: theme.dividerColor,
+              margin: EdgeInsets.symmetric(horizontal: 16.w),
+            ),
+          if (hasProd)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'invoices.production'.tr(),
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w500,
+                      color: ColorsManager.defaultTextSecondary,
+                    ),
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    invoice.production!,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

@@ -107,9 +107,9 @@ class _InventoryFilterBarState extends State<InventoryFilterBar> {
                 _selectedStatus     = null;
                 _selectedCategoryId = null;
               });
-              context.read<InventoryCubit>().clearFilters();
+              context.read<InventoryCubit>().fetchItems();
             },
-            icon: Icon(Icons.refresh,
+            icon: const Icon(Icons.refresh,
                 color: ColorsManager.primaryColor, size: 20),
             tooltip: 'common.retry'.tr(),
           ),

@@ -72,6 +72,20 @@ class InvoiceHeaderCard extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                       color: ColorsManager.defaultTextSecondary),
                 ),
+                if (invoice.jobName != null && invoice.jobName!.isNotEmpty) ...[
+                  SizedBox(height: 4.h),
+                  _MetaChip(
+                    icon: Icons.work_outline_rounded,
+                    label: invoice.jobName!,
+                  ),
+                ],
+                if (invoice.production != null && invoice.production!.isNotEmpty) ...[
+                  SizedBox(height: 3.h),
+                  _MetaChip(
+                    icon: Icons.location_on_outlined,
+                    label: invoice.production!,
+                  ),
+                ],
               ],
             ),
           ),
@@ -80,6 +94,33 @@ class InvoiceHeaderCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Small inline chip for job name / production label in the header card.
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MetaChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 12.r, color: ColorsManager.defaultTextSecondary),
+      SizedBox(width: 4.w),
+      Flexible(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.sp,
+            color: ColorsManager.defaultTextSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ],
+  );
 }
 
 class _CustomerChip extends StatelessWidget {

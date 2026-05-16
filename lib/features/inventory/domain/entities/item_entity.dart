@@ -20,6 +20,9 @@ class ItemEntity extends Equatable {
   final String name;
   final String? model;
   final double defaultPrice;
+  final double priceFilm;
+  final double priceSeries;
+  final double priceAd;
   final int totalQty;
   final int availableQty;
   final ItemStatus status;
@@ -39,6 +42,9 @@ class ItemEntity extends Equatable {
     this.imageUrl,
     this.categoryId,
     this.category,
+    this.priceFilm = 0.0,
+    this.priceSeries = 0.0,
+    this.priceAd = 0.0,
     required this.createdAt,
   });
 
@@ -46,6 +52,7 @@ class ItemEntity extends Equatable {
   List<Object?> get props => [
     id, name, model, defaultPrice,
     totalQty, availableQty, status,
+    priceFilm, priceSeries, priceAd,
     imageUrl, categoryId, category, createdAt,
   ];
 }

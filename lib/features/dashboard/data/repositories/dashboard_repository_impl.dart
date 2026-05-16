@@ -16,15 +16,16 @@ class DashboardRepositoryImpl implements DashboardRepository {
   @override
   Future<Either<Failure, DashboardEntity>> getDashboardData() {
     return ResultHandler.handle(() async {
-      final raw = await _remoteDataSource.getDashboardData();
+      final rawData = await _remoteDataSource.getDashboardData();
 
       return DashboardModel.fromRaw(
-        transactions: raw['transactions'],
-        activeInvoices: raw['activeInvoices'],
-        customers: raw['customers'],
-        recentInvoicesRaw: raw['recentInvoices'],
-        monthlyRaw: raw['monthlyRevenues'],
-        previousMonthRevenue: raw['previousMonthRevenue'] as double, // NEW
+        transactions: rawData['transactions'],
+        activeInvoices: rawData['activeInvoices'],
+        customers: rawData['customers'],
+        recentInvoicesRaw: rawData['recentInvoices'],
+        supplierDebtsRaw: rawData['supplierDebts'],
+        monthlyRaw: rawData['monthlyRevenues'],
+        previousMonthRevenue: rawData['previousMonthRevenue'],
       );
     });
   }

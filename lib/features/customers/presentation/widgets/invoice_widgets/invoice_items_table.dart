@@ -1,16 +1,8 @@
 // lib/features/customers/presentation/widgets/invoice_items_table.dart
 //
-// Self-contained scrollable items table for the invoice details page.
-//
-// Layout strategy
-// ───────────────
-// • LayoutBuilder measures the available width.
-// • If available > kTableMinWidth the table fills that width
-//   (columns scale proportionally via the flexible item column).
-// • If available < kTableMinWidth the table is exactly
-//   kTableMinWidth wide and the outer SingleChildScrollView
-//   lets the user scroll horizontally — overflow is impossible.
-// ─────────────────────────────────────────────────────────────────
+// ⚠️  UPDATED: Added discount column to the details table
+// ─────────────────────────────────────────────────────────────────────────────
+
 import 'package:bungee_manage_sys/core/theme/colors.dart';
 import 'package:bungee_manage_sys/core/utils/enums.dart';
 import 'package:bungee_manage_sys/core/widgets/status_chip.dart';
@@ -126,13 +118,15 @@ abstract final class _Col {
   static const double returned = 60;
   static const double days     = 52;
   static const double price    = 64;
+  static const double discount = 60; // 🆕 Discount column width
   static const double total    = 64;
   static const double status   = 84;
   static const double action   = 92;
 
   /// Total width consumed by fixed columns + row horizontal padding.
+  /// 🆕 Updated to include discount column
   static const double _fixedSum =
-      hPad * 2 + qty + returned + days + price + total + status + action;
+      hPad * 2 + qty + returned + days + price + discount + total + status + action;
 
   /// Width of the flexible item-name column given [tableWidth].
   /// Clamped to a minimum of 120 so it never disappears.
@@ -171,6 +165,7 @@ class TableHeader extends StatelessWidget {
           _Hdr('invoices.col_returned'.tr(), style, w: _Col.returned,  align: TextAlign.center),
           _Hdr('invoices.col_days'.tr(),     style, w: _Col.days,     align: TextAlign.center),
           _Hdr('invoices.col_price'.tr(),    style, w: _Col.price,    align: TextAlign.center),
+          _Hdr('invoices.col_disc_pct'.tr(), style, w: _Col.discount, align: TextAlign.center), // 🆕 Discount header
           _Hdr('invoices.col_total'.tr(),    style, w: _Col.total,    align: TextAlign.end),
           _Hdr('invoices.col_status'.tr(),   style, w: _Col.status,   align: TextAlign.center),
           SizedBox(width: _Col.action),
@@ -227,6 +222,12 @@ class _TableRow extends StatelessWidget {
         ? ColorsManager.warningSurface
         : theme.cardColor;
 
+    // 🆕 حساب الخصم %
+    final lineTotal = item.qty * item.days * item.pricePerDay;
+    final discountPercent = lineTotal > 0
+        ? ((item.itemDiscount ?? 0) / lineTotal * 100).toStringAsFixed(1)
+        : '0.0';
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -251,6 +252,8 @@ class _TableRow extends StatelessWidget {
               ),
               _Cell('${item.days}',                            w: _Col.days),
               _Cell(item.pricePerDay.toStringAsFixed(0),       w: _Col.price),
+              // 🆕 Discount % column
+              _Cell('$discountPercent%',                        w: _Col.discount),
               // ── Line total (end-aligned) ──
               SizedBox(
                 width: _Col.total,

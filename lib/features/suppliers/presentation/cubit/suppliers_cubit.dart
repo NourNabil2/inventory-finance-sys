@@ -3,14 +3,16 @@
 import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
+import 'package:bungee_manage_sys/features/suppliers/domain/entities/clearing_result.dart';
+import 'package:bungee_manage_sys/features/suppliers/domain/entities/service_invoice_entity.dart';
 import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_entity.dart';
 import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_invoice_entity.dart';
+import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_invoice_item_entity.dart';
 import 'package:bungee_manage_sys/features/suppliers/domain/repositories/suppliers_repository.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:equatable/equatable.dart';
 import 'package:excel/excel.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:uuid/uuid.dart';
 
 part 'suppliers_state.dart';
 
@@ -19,83 +21,87 @@ class SuppliersCubit extends Cubit<SuppliersState> {
 
   SuppliersCubit(this._repository) : super(const SuppliersState());
 
-  // ── Fetch list ────────────────────────────────────────────────────────
+  // ── Fetch list ────────────────────────────────────────────
 
   Future<void> fetchSuppliers() async {
     emit(state.copyWith(status: SuppliersStatus.loading, clearError: true));
     final result = await _repository.getSuppliers();
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        status: SuppliersStatus.failure,
-        errorMessage: f.message,
-      )),
+          status: SuppliersStatus.failure, errorMessage: f.message)),
           (list) => emit(state.copyWith(
-        status:    SuppliersStatus.success,
-        suppliers: list,
-        filtered:  _filter(list, state.searchQuery),
-      )),
+          status: SuppliersStatus.success,
+          suppliers: list,
+          filtered: _filter(list, state.searchQuery))),
     );
   }
 
-  // ── Search ────────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────
 
   void search(String query) {
     emit(state.copyWith(
       searchQuery: query,
-      filtered:    _filter(state.suppliers, query),
+      filtered: _filter(state.suppliers, query),
     ));
   }
 
-  // ── Select supplier ───────────────────────────────────────────────────
+  // ── Select supplier ───────────────────────────────────────
 
   Future<void> selectSupplier(SupplierEntity supplier) async {
     emit(state.copyWith(
-      selectedSupplier:     supplier,
-      clearInvoices:        true,
-      clearSelectedInvoice: true,
+      selectedSupplier:            supplier,
+      clearInvoices:               true,
+      clearServiceInvoices:        true,
+      clearSelectedInvoice:        true,
+      clearSelectedServiceInvoice: true,
+      activeTab:                   SupplierLedgerTab.purchases,
     ));
-    await fetchSupplierInvoices(supplier.id);
+    await Future.wait([
+      fetchSupplierInvoices(supplier.id),
+      fetchSupplierServiceInvoices(supplier.id),
+    ]);
   }
 
   void clearSelection() {
     emit(state.copyWith(
-      clearSelectedSupplier: true,
-      clearSelectedInvoice:  true,
-      clearInvoices:         true,
+      clearSelectedSupplier:       true,
+      clearSelectedInvoice:        true,
+      clearSelectedServiceInvoice: true,
+      clearInvoices:               true,
+      clearServiceInvoices:        true,
     ));
   }
 
-  // ── Fetch invoices for selected supplier ──────────────────────────────
+  // ── Tab switching ─────────────────────────────────────────
+
+  void switchTab(SupplierLedgerTab tab) {
+    emit(state.copyWith(activeTab: tab));
+  }
+
+  // ── Purchase invoices ─────────────────────────────────────
 
   Future<void> fetchSupplierInvoices(String supplierId) async {
     emit(state.copyWith(status: SuppliersStatus.loading));
     final result = await _repository.getSupplierInvoices(supplierId);
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        status:       SuppliersStatus.failure,
-        errorMessage: f.message,
-      )),
-          (list) => emit(state.copyWith(
-        status:   SuppliersStatus.success,
-        invoices: list,
-      )),
+          status: SuppliersStatus.failure, errorMessage: f.message)),
+          (list) => emit(
+          state.copyWith(status: SuppliersStatus.success, invoices: list)),
     );
   }
-
-  // ── Select invoice ────────────────────────────────────────────────────
 
   Future<void> selectInvoice(String invoiceId) async {
     emit(state.copyWith(status: SuppliersStatus.loading));
     final result = await _repository.getInvoiceDetails(invoiceId);
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        status:       SuppliersStatus.failure,
-        errorMessage: f.message,
-      )),
+          status: SuppliersStatus.failure, errorMessage: f.message)),
           (invoice) => emit(state.copyWith(
-        status:          SuppliersStatus.success,
-        selectedInvoice: invoice,
-      )),
+          status: SuppliersStatus.success, selectedInvoice: invoice)),
     );
   }
 
@@ -103,24 +109,21 @@ class SuppliersCubit extends Cubit<SuppliersState> {
     emit(state.copyWith(clearSelectedInvoice: true));
   }
 
-  // ── Save supplier (create / update) ──────────────────────────────────
+  // ── Supplier CRUD ─────────────────────────────────────────
 
   Future<void> saveSupplier(SupplierEntity supplier) async {
     emit(state.copyWith(formStatus: SupplierFormStatus.submitting));
     final result = await _repository.saveSupplier(supplier);
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        formStatus:   SupplierFormStatus.error,
-        errorMessage: f.message,
-      )),
+          formStatus: SupplierFormStatus.error, errorMessage: f.message)),
           (_) async {
         emit(state.copyWith(formStatus: SupplierFormStatus.submitted));
         await fetchSuppliers();
       },
     );
   }
-
-  // ── Create supplier invoice ───────────────────────────────────────────
 
   Future<void> createInvoice({
     required String supplierId,
@@ -129,24 +132,17 @@ class SuppliersCubit extends Cubit<SuppliersState> {
   }) async {
     emit(state.copyWith(status: SuppliersStatus.loading));
     final result = await _repository.createSupplierInvoice(
-      supplierId: supplierId,
-      items:      items,
-      notes:      notes,
-    );
+        supplierId: supplierId, items: items, notes: notes);
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        status:       SuppliersStatus.failure,
-        errorMessage: f.message,
-      )),
+          status: SuppliersStatus.failure, errorMessage: f.message)),
           (_) async {
         await fetchSupplierInvoices(supplierId);
-        // Refresh supplier list so balance updates
         await fetchSuppliers();
       },
     );
   }
-
-  // ── Record payment ────────────────────────────────────────────────────
 
   Future<void> recordPayment({
     required String invoiceId,
@@ -156,17 +152,12 @@ class SuppliersCubit extends Cubit<SuppliersState> {
   }) async {
     emit(state.copyWith(status: SuppliersStatus.loading));
     final result = await _repository.recordPayment(
-      invoiceId: invoiceId,
-      amount:    amount,
-      method:    method,
-    );
+        invoiceId: invoiceId, amount: amount, method: method);
+    if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(
-        status:       SuppliersStatus.failure,
-        errorMessage: f.message,
-      )),
+          status: SuppliersStatus.failure, errorMessage: f.message)),
           (_) async {
-        // Refresh invoice detail + list + supplier balances
         await selectInvoice(invoiceId);
         await fetchSupplierInvoices(supplierId);
         await fetchSuppliers();
@@ -174,7 +165,260 @@ class SuppliersCubit extends Cubit<SuppliersState> {
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────
+  // ── Service invoices (rental billed TO supplier) ──────────
+
+  Future<void> fetchSupplierServiceInvoices(String supplierId) async {
+    emit(state.copyWith(serviceInvoicesStatus: ServiceInvoicesStatus.loading));
+    final result = await _repository.getSupplierServiceInvoices(supplierId);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          serviceInvoicesStatus: ServiceInvoicesStatus.failure,
+          errorMessage: f.message)),
+          (list) => emit(state.copyWith(
+          serviceInvoicesStatus: ServiceInvoicesStatus.success,
+          serviceInvoices: list)),
+    );
+  }
+
+  /// Full itemised service invoice — uses the `create_full_supplier_service_invoice` RPC.
+  Future<void> createFullServiceInvoiceForSupplier({
+    required String supplierId,
+    required Map<String, dynamic> invoiceData,
+    required List<Map<String, dynamic>> itemsData,
+  }) async {
+    emit(state.copyWith(status: SuppliersStatus.loading, clearError: true));
+    final result = await _repository.createFullServiceInvoiceForSupplier(
+      supplierId:  supplierId,
+      invoiceData: invoiceData,
+      itemsData:   itemsData,
+    );
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          status: SuppliersStatus.failure, errorMessage: f.message)),
+          (_) async {
+        emit(state.copyWith(status: SuppliersStatus.success));
+        await fetchSupplierServiceInvoices(supplierId);
+        await fetchSuppliers(); // refreshes service_debt on the entity
+      },
+    );
+  }
+
+  /// Legacy simple (amount-only) service invoice.
+  Future<void> createServiceInvoiceForSupplier({
+    required String supplierId,
+    required double totalAmount,
+    String? notes,
+  }) async {
+    emit(state.copyWith(status: SuppliersStatus.loading));
+    final result = await _repository.createServiceInvoiceForSupplier(
+        supplierId: supplierId, totalAmount: totalAmount, notes: notes);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          status: SuppliersStatus.failure, errorMessage: f.message)),
+          (_) async {
+        await fetchSupplierServiceInvoices(supplierId);
+        await fetchSuppliers();
+      },
+    );
+  }
+
+  // ── Select / deselect service invoice ────────────────────
+
+  void selectServiceInvoice(ServiceInvoiceEntity invoice) {
+    emit(state.copyWith(selectedServiceInvoice: invoice));
+  }
+
+  void clearSelectedServiceInvoice() {
+    emit(state.copyWith(clearSelectedServiceInvoice: true));
+  }
+
+  // ── Record payment on service invoice ────────────────────
+
+  Future<void> recordServicePayment({
+    required String invoiceId,
+    required String supplierId,
+    required double amount,
+    required String method,
+  }) async {
+    emit(state.copyWith(status: SuppliersStatus.loading));
+    final result = await _repository.recordServicePayment(
+        invoiceId: invoiceId,
+        supplierId: supplierId,
+        amount: amount,
+        method: method);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          status: SuppliersStatus.failure, errorMessage: f.message)),
+          (_) async {
+        await fetchSupplierServiceInvoices(supplierId);
+        await fetchSuppliers();
+      },
+    );
+  }
+
+  // ── Unified supplier clearing ─────────────────────────────
+
+  Future<void> executeSupplierClearing({
+    required String supplierId,
+    required double amount,
+    String? notes,
+    String? createdBy,
+  }) async {
+    emit(state.copyWith(
+      clearingStatus:      ClearingStatus.loading,
+      clearClearingResult: true,
+      clearError:          true,
+    ));
+    final result = await _repository.executeSupplierClearing(
+        supplierId: supplierId,
+        amount:     amount,
+        notes:      notes,
+        createdBy:  createdBy);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          clearingStatus: ClearingStatus.failure, errorMessage: f.message)),
+          (clearingResult) async {
+        emit(state.copyWith(
+          clearingStatus:     ClearingStatus.success,
+          lastClearingResult: clearingResult,
+        ));
+        await fetchSuppliers();
+        if (state.selectedSupplier?.id == supplierId) {
+          final fresh = state.suppliers.firstWhere(
+                (s) => s.id == supplierId,
+            orElse: () => state.selectedSupplier!,
+          );
+          if (!isClosed) emit(state.copyWith(selectedSupplier: fresh));
+        }
+      },
+    );
+  }
+
+  void resetClearingStatus() {
+    emit(state.copyWith(
+      clearingStatus:      ClearingStatus.idle,
+      clearClearingResult: true,
+    ));
+  }
+
+  // ── Legacy cross-customer clearing ────────────────────────
+
+  Future<void> linkCustomerToSupplier({
+    required String supplierId,
+    required String? customerId,
+  }) async {
+    emit(state.copyWith(
+        linkCustomerStatus: LinkCustomerStatus.loading, clearError: true));
+    final result = await _repository.updateLinkedCustomer(
+        supplierId: supplierId, customerId: customerId);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          linkCustomerStatus: LinkCustomerStatus.failure,
+          errorMessage: f.message)),
+          (_) async {
+        emit(state.copyWith(linkCustomerStatus: LinkCustomerStatus.success));
+        await fetchSuppliers();
+        if (state.selectedSupplier?.id == supplierId) {
+          final fresh = state.suppliers.firstWhere(
+                (s) => s.id == supplierId,
+            orElse: () => state.selectedSupplier!.copyWith(
+              linkedCustomerId:    customerId,
+              clearLinkedCustomer: customerId == null,
+            ),
+          );
+          if (!isClosed) emit(state.copyWith(selectedSupplier: fresh));
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!isClosed) {
+          emit(state.copyWith(linkCustomerStatus: LinkCustomerStatus.idle));
+        }
+      },
+    );
+  }
+
+  Future<void> executeClearing({
+    required String supplierId,
+    required String customerId,
+    required double amount,
+    String? notes,
+    String? createdBy,
+  }) async {
+    emit(state.copyWith(
+      clearingStatus:      ClearingStatus.loading,
+      clearClearingResult: true,
+      clearError:          true,
+    ));
+    final result = await _repository.executeClearing(
+        supplierId: supplierId,
+        customerId: customerId,
+        amount:     amount,
+        notes:      notes,
+        createdBy:  createdBy);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          clearingStatus: ClearingStatus.failure, errorMessage: f.message)),
+          (clearingResult) async {
+        emit(state.copyWith(
+          clearingStatus:     ClearingStatus.success,
+          lastClearingResult: clearingResult,
+        ));
+        await fetchSuppliers();
+      },
+    );
+  }
+
+  Future<void> executeFlexibleClearing({
+    required String supplierId,
+    required String clearingType,
+    double offsetAmount = 0,
+    double cashAmount   = 0,
+    String cashMethod   = 'safe',
+    String? notes,
+    String? createdBy,
+  }) async {
+    emit(state.copyWith(
+      clearingStatus:      ClearingStatus.loading,
+      clearClearingResult: true,
+      clearError:          true,
+    ));
+    final result = await _repository.executeFlexibleClearing(
+      supplierId:   supplierId,
+      clearingType: clearingType,
+      offsetAmount: offsetAmount,
+      cashAmount:   cashAmount,
+      cashMethod:   cashMethod,
+      notes:        notes,
+      createdBy:    createdBy,
+    );
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          clearingStatus: ClearingStatus.failure, errorMessage: f.message)),
+          (clearingResult) async {
+        emit(state.copyWith(
+          clearingStatus:     ClearingStatus.success,
+          lastClearingResult: clearingResult,
+        ));
+        await fetchSuppliers();
+        if (state.selectedSupplier?.id == supplierId) {
+          final fresh = state.suppliers.firstWhere(
+                (s) => s.id == supplierId,
+            orElse: () => state.selectedSupplier!,
+          );
+          if (!isClosed) emit(state.copyWith(selectedSupplier: fresh));
+        }
+      },
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────
 
   List<SupplierEntity> _filter(List<SupplierEntity> list, String query) {
     final q = query.trim().toLowerCase();
@@ -182,7 +426,7 @@ class SuppliersCubit extends Cubit<SuppliersState> {
     return list.where((s) => s.name.toLowerCase().contains(q)).toList();
   }
 
-  // ── Export All Suppliers to Excel ───────────────────────────────────────
+  // ── Export ────────────────────────────────────────────────
 
   Future<bool> exportSuppliersToExcel() async {
     final listToExport = state.filtered;
@@ -190,114 +434,120 @@ class SuppliersCubit extends Cubit<SuppliersState> {
 
     try {
       var excel = Excel.createExcel();
-      String sheetName = 'بيانات الموردين';
+      const String sheetName = 'بيانات الموردين';
       Sheet sheet = excel[sheetName];
       excel.setDefaultSheet(sheetName);
       sheet.isRTL = true;
 
-      // ── تنسيقات الخلايا ──
-      CellStyle headerStyle = CellStyle(
+      final headerStyle = CellStyle(
         bold: true,
         horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
       );
-      CellStyle dataStyle = CellStyle(
+      final dataStyle = CellStyle(
         horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
       );
-      CellStyle boldDataStyle = CellStyle(
+      final boldDataStyle = CellStyle(
         bold: true,
         horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
       );
 
-      // ── عرض الأعمدة ──
       sheet.setColumnWidth(0, 5);
       sheet.setColumnWidth(1, 30);
       sheet.setColumnWidth(2, 15);
       sheet.setColumnWidth(3, 15);
-      sheet.setColumnWidth(4, 20);
+      sheet.setColumnWidth(4, 22);
+      sheet.setColumnWidth(5, 22);
+      sheet.setColumnWidth(6, 20);
 
-      // ── العناوين ──
       sheet.appendRow([TextCellValue('تقرير شامل بحسابات الموردين')]);
-      sheet.cell(CellIndex.indexByString("A1")).cellStyle = CellStyle(bold: true, fontSize: 14);
-      sheet.appendRow([TextCellValue('تاريخ التقرير: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}')]);
+      sheet.cell(CellIndex.indexByString('A1')).cellStyle =
+          CellStyle(bold: true, fontSize: 14);
+      sheet.appendRow([
+        TextCellValue(
+            'تاريخ التقرير: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}')
+      ]);
       sheet.appendRow([TextCellValue('')]);
 
-      List<CellValue> headers = [
+      final headers = <CellValue>[
         TextCellValue('م'),
         TextCellValue('اسم المورد'),
         TextCellValue('رقم الهاتف'),
         TextCellValue('تاريخ التسجيل'),
-        TextCellValue('المديونية المستحقة (علينا)'),
+        TextCellValue('مديونية له (نحن ندفع)'),
+        TextCellValue('مديونية عليه (يدفع لنا)'),
+        TextCellValue('صافي المركز'),
       ];
       sheet.appendRow(headers);
       for (int i = 0; i < headers.length; i++) {
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 3)).cellStyle = headerStyle;
+        sheet
+            .cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 3))
+            .cellStyle = headerStyle;
       }
 
-      // ── متغيرات الإجماليات ──
-      double sumDebt = 0;
-
+      double sumBalance = 0, sumDebt = 0;
       int currentRow = 4;
       for (int i = 0; i < listToExport.length; i++) {
         final s = listToExport[i];
-
         sheet.appendRow([
           IntCellValue(i + 1),
           TextCellValue(s.name),
           TextCellValue(s.phone ?? '-'),
           TextCellValue(DateFormat('yyyy-MM-dd').format(s.createdAt)),
           DoubleCellValue(s.balance),
+          DoubleCellValue(s.serviceDebt),
+          DoubleCellValue(s.netPosition),
         ]);
-
-        for (int j = 0; j < 5; j++) {
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: currentRow)).cellStyle = dataStyle;
+        for (int j = 0; j < 7; j++) {
+          sheet
+              .cell(CellIndex.indexByColumnRow(
+              columnIndex: j, rowIndex: currentRow))
+              .cellStyle = dataStyle;
         }
-
-        sumDebt += s.balance;
+        sumBalance += s.balance;
+        sumDebt += s.serviceDebt;
         currentRow++;
       }
 
-      // ── سطر الإجماليات النهائي ──
       sheet.appendRow([TextCellValue('')]);
       currentRow++;
-
       sheet.appendRow([
         TextCellValue(''),
-        TextCellValue('إجمالي المديونيات المستحقة للموردين'),
+        TextCellValue('الإجماليات'),
         TextCellValue(''),
         TextCellValue(''),
+        DoubleCellValue(sumBalance),
         DoubleCellValue(sumDebt),
+        DoubleCellValue(sumBalance - sumDebt),
       ]);
-
-      for (int j = 0; j < 5; j++) {
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: currentRow)).cellStyle = boldDataStyle;
+      for (int j = 0; j < 7; j++) {
+        sheet
+            .cell(CellIndex.indexByColumnRow(
+            columnIndex: j, rowIndex: currentRow))
+            .cellStyle = boldDataStyle;
       }
 
-      // ── حفظ وتصدير ──
-      var fileBytes = excel.encode();
+      final fileBytes = excel.encode();
       if (fileBytes != null) {
-        final fileName = 'Suppliers_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}';
+        final fileName =
+            'Suppliers_Report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}';
         await FileSaver.instance.saveFile(
-          name: fileName,
-          bytes: Uint8List.fromList(fileBytes),
-          ext: 'xlsx',
+          name:     fileName,
+          bytes:    Uint8List.fromList(fileBytes),
+          ext:      'xlsx',
           mimeType: MimeType.microsoftExcel,
         );
       }
-
-      // 🚨 نرجع True لو كل حاجة تمام 🚨
       return true;
-
     } catch (e) {
       if (!isClosed) {
         emit(state.copyWith(
-          status: SuppliersStatus.failure,
+          status:       SuppliersStatus.failure,
           errorMessage: 'حدث خطأ أثناء تصدير الملف: $e',
         ));
       }
-      // 🚨 نرجع False لو حصل إيرور 🚨
       return false;
     }
   }

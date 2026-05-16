@@ -64,7 +64,9 @@ class AppRouter {
         );
 
       default:
-        return _errorRoute();
+        return MaterialPageRoute(
+          builder: (_) => const DashboardShell(),
+        );
     }
   }
 

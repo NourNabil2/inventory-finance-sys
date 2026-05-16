@@ -540,6 +540,7 @@ extension AppTextFieldFactory on AppTextField {
   // Add this to your existing AppTextField factory extension
 
 // Search input field
+  // Search input field
   static AppTextField search({
     Key? key,
     String hintText = 'Search',
@@ -574,9 +575,9 @@ extension AppTextFieldFactory on AppTextField {
       focusNode: focusNode,
       onTap: onTap,
       onSubmitted: onSubmitted,
+      // Icon will take the default text/hint color automatically if not provided
       prefixIcon: prefixIcon ?? const Icon(
         Icons.search,
-        color: Colors.grey,
         size: 20,
       ),
       suffixIcon: suffixIcon,
@@ -588,10 +589,10 @@ extension AppTextFieldFactory on AppTextField {
       onChanged: onChanged,
       hasError: hasError,
 
-      // Search-specific styling
-      fillColor: fillColor ?? Colors.grey[100],
-      focusedFillColor: focusedFillColor ?? Colors.grey[100],
-      focusedHintColor: focusedHintColor ?? Colors.grey[600],
+      // Let it use the default dynamic theme colors from the main build method
+      fillColor: fillColor,
+      focusedFillColor: focusedFillColor,
+      focusedHintColor: focusedHintColor,
       titleStyle: titleStyle,
       titleColor: titleColor,
 

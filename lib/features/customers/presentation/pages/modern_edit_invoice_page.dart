@@ -34,6 +34,10 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
   late final List<_ExistingRow> _existing;
   final List<_NewRow> _newRows = [];
   late final TextEditingController _discCtrl;
+  final List<String> _deletedItemIds = [];
+  late final TextEditingController _jobNameCtrl;
+  late final TextEditingController _productionCtrl;
+
   bool _submitting = false;
 
   @override
@@ -41,6 +45,11 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
     super.initState();
     _discCtrl = TextEditingController(
         text: widget.invoice.discountPercent.toStringAsFixed(1));
+
+    // 🚨 تحميل البيانات القديمة لو موجودة 🚨
+    _jobNameCtrl = TextEditingController(text: widget.invoice.jobName ?? '');
+    _productionCtrl = TextEditingController(text: widget.invoice.production ?? '');
+
     _existing = widget.invoice.items
         .where((i) => i.isOut)
         .map(_ExistingRow.new)
@@ -50,6 +59,8 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
   @override
   void dispose() {
     _discCtrl.dispose();
+    _jobNameCtrl.dispose();
+    _productionCtrl.dispose();
     for (final r in _existing) r.dispose();
     for (final r in _newRows) r.dispose();
     super.dispose();
@@ -63,25 +74,23 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
   }
 
   double get _oldNet => widget.invoice.netTotal;
-
-  double _existingSubtotal() =>
-      _existing.fold(0.0, (s, r) => s + r.lineNet);
-
+  double _existingSubtotal() => _existing.fold(0.0, (s, r) => s + r.lineNet);
   double _newSubtotal() => _newRows.fold(0.0, (s, r) => s + r.lineNet);
-
   double _newInvDiscount() {
     final pct = (double.tryParse(_discCtrl.text) ?? 0).clamp(0, 100);
     return (_existingSubtotal() + _newSubtotal()) * (pct / 100);
   }
 
-  double get _newNet =>
-      (_existingSubtotal() + _newSubtotal() - _newInvDiscount())
-          .clamp(0, double.infinity);
-
-  double get _additionalDebt => (_newNet - _oldNet).clamp(0, double.infinity);
+  double get _newNet => (_existingSubtotal() + _newSubtotal() - _newInvDiscount()).clamp(0, double.infinity);
+ // double get _additionalDebt => (_newNet - _oldNet).clamp(0, double.infinity);
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    if (_existing.isEmpty && _newRows.isEmpty) {
+      context.showError('بالعقل كده لا يمكن أن تكون الفاتورة فارغة'.tr());
+      return;
+    }
 
     final isAdmin = context.read<UserCubit>().isAdmin;
 
@@ -128,9 +137,11 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
       newItems:        newItemEntities,
       modifiedItems:   modifiedItems,
       newDiscountFlat: newDiscFlat,
+      deletedItemIds:  _deletedItemIds,
+      jobName:         _jobNameCtrl.text.trim().isEmpty ? null : _jobNameCtrl.text.trim(),
+      production:      _productionCtrl.text.trim().isEmpty ? null : _productionCtrl.text.trim(),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -154,22 +165,34 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: _hPad, vertical: 24.h),
+                  padding: EdgeInsets.symmetric(horizontal: _hPad, vertical: 24.h),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 🚨 حقول الإدخال لاسم العمل والإنتاج في صفحة التعديل 🚨
+                        _JobProductionRow(
+                          jobNameCtrl: _jobNameCtrl,
+                          productionCtrl: _productionCtrl,
+                        ),
+                        SizedBox(height: 24.h),
+
                         _ExistingItemsSection(
                           rows: _existing,
+                          onRemove: (index) {
+                            setState(() {
+                              _deletedItemIds.add(_existing[index].original.id);
+                              _existing[index].dispose();
+                              _existing.removeAt(index);
+                            });
+                          },
                           onChanged: () => setState(() {}),
                         ),
                         SizedBox(height: 20.h),
                         _NewItemsSection(
                           rows: _newRows,
-                          onAdd: (item) =>
-                              setState(() => _newRows.add(_NewRow(item: item))),
+                          onAdd: (item) => setState(() => _newRows.add(_NewRow(item: item))),
                           onRemove: (i) => setState(() {
                             _newRows[i].dispose();
                             _newRows.removeAt(i);
@@ -201,7 +224,7 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
               _EditFooter(
                 oldNet: _oldNet,
                 newNet: _newNet,
-                additionalDebt: _additionalDebt,
+                // additionalDebt: _additionalDebt,
                 submitting: _submitting,
                 hPad: _hPad,
                 onSubmit: _submit,
@@ -243,14 +266,86 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
   );
 }
 
+// ─── Job Production Row ───────────────────────────────────────────────────────
+class _JobProductionRow extends StatelessWidget {
+  final TextEditingController jobNameCtrl;
+  final TextEditingController productionCtrl;
+
+  const _JobProductionRow({
+    required this.jobNameCtrl,
+    required this.productionCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = TextStyle(
+      fontSize: 11.sp,
+      fontWeight: FontWeight.w600,
+      color: ColorsManager.defaultTextSecondary,
+      letterSpacing: 0.2,
+    );
+
+    InputDecoration fieldDeco(String hint) => InputDecoration(
+      isDense: true,
+      hintText: hint,
+      hintStyle: TextStyle(fontSize: 12.sp, color: ColorsManager.defaultTextSecondary),
+      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      filled: true,
+      fillColor: theme.cardColor,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: theme.dividerColor)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: theme.dividerColor)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r), borderSide: BorderSide(color: ColorsManager.primaryColor, width: 1.5)),
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.job_name'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: jobNameCtrl,
+                style: TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco('invoices.job_name_hint'.tr()),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.production'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: productionCtrl,
+                style: TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco('invoices.production_hint'.tr()),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Existing items section ───────────────────────────────────────────────────
 
 class _ExistingItemsSection extends StatelessWidget {
   final List<_ExistingRow> rows;
   final VoidCallback onChanged;
+  final void Function(int) onRemove; // 🚨 أضفنا دي
 
-  const _ExistingItemsSection(
-      {required this.rows, required this.onChanged});
+  const _ExistingItemsSection({
+    required this.rows,
+    required this.onChanged,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -277,7 +372,10 @@ class _ExistingItemsSection extends StatelessWidget {
                 ...rows.asMap().entries.map((e) => Column(children: [
                   Container(height: 1, color: theme.dividerColor),
                   _ExistingRowWidget(
-                      row: e.value, onChanged: onChanged),
+                    row: e.value,
+                    onChanged: onChanged,
+                    onRemove: () => onRemove(e.key), // 🚨 ربطنا الحذف
+                  ),
                 ])),
               ],
             ),
@@ -301,14 +399,13 @@ class _ExistingHeader extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
       child: Row(
         children: [
-          Expanded(
-              flex: 4, child: Text('invoices.col_item'.tr(), style: s)),
+          Expanded(flex: 4, child: Text('invoices.col_item'.tr(), style: s)),
           _Hdr('invoices.col_qty'.tr(), s),
           _Hdr('invoices.col_days'.tr(), s),
           _Hdr('invoices.col_price'.tr(), s),
           _Hdr('invoices.col_disc_pct'.tr(), s),
           _Hdr('invoices.col_total'.tr(), s, end: true),
-          _Hdr('invoices.col_status'.tr(), s),
+          SizedBox(width: 32.w), // 🚨 مساحة لزرار الـ X
         ],
       ),
     );
@@ -318,7 +415,13 @@ class _ExistingHeader extends StatelessWidget {
 class _ExistingRowWidget extends StatefulWidget {
   final _ExistingRow row;
   final VoidCallback onChanged;
-  const _ExistingRowWidget({required this.row, required this.onChanged});
+  final VoidCallback onRemove; // 🚨 استقبال حدث الحذف
+
+  const _ExistingRowWidget({
+    required this.row,
+    required this.onChanged,
+    required this.onRemove,
+  });
 
   @override
   State<_ExistingRowWidget> createState() => _ExistingRowWidgetState();
@@ -336,7 +439,6 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
       color: theme.cardColor,
       child: Row(
         children: [
-          // اسم الصنف — مش بيتغير
           Expanded(
             flex: 4,
             child: Column(
@@ -355,8 +457,6 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
               ],
             ),
           ),
-
-          // ── الكمية: أدمن = editable, غيره = locked ──
           isAdmin
               ? _EditableCell(ctrl: r.qtyCtrl, onChanged: widget.onChanged,
               validator: (v) {
@@ -364,8 +464,6 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
                 return (n == null || n < 1) ? '≥1' : null;
               })
               : _LockedCell('${r.original.qty}'),
-
-          // ── الأيام: للكل editable (الحالي) ──
           SizedBox(
             width: 70.w,
             child: TextFormField(
@@ -385,13 +483,9 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
               },
             ),
           ),
-
-          // ── السعر: أدمن = editable ──
           isAdmin
               ? _EditableCell(ctrl: r.priceCtrl, allowDecimal: true, onChanged: widget.onChanged)
               : _LockedCell(r.original.pricePerDay.toStringAsFixed(0)),
-
-          // ── الخصم: أدمن = editable ──
           isAdmin
               ? _EditableCell(ctrl: r.discCtrl, allowDecimal: true, suffix: '%', onChanged: widget.onChanged,
               validator: (v) {
@@ -401,28 +495,20 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
               : _LockedCell(r.original.itemDiscount > 0
               ? '${r.original.itemDiscountPercent.toStringAsFixed(1)}%'
               : '—'),
-
-          // الإجمالي
           SizedBox(
             width: 70.w,
             child: Text(r.lineNet.toStringAsFixed(0),
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.sp),
                 textAlign: TextAlign.end),
           ),
-
-          // Status badge
+          // 🚨 زرار الـ X للحذف 🚨
           SizedBox(
-            width: 70.w,
-            child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
-                decoration: BoxDecoration(
-                    color: ColorsManager.warningSurface,
-                    borderRadius: BorderRadius.circular(4.r)),
-                child: Text('invoices.item_status_out'.tr(),
-                    style: TextStyle(fontSize: 10.sp,
-                        color: ColorsManager.warningText, fontWeight: FontWeight.w600)),
-              ),
+            width: 32.w,
+            child: GestureDetector(
+              onTap: widget.onRemove,
+              child: Icon(Icons.close,
+                  size: 16.r,
+                  color: ColorsManager.errorText),
             ),
           ),
         ],
@@ -518,6 +604,7 @@ class _NewItemsSection extends StatefulWidget {
 
 class _NewItemsSectionState extends State<_NewItemsSection> {
   ItemEntity? _pick;
+  String? _selectedCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -529,39 +616,83 @@ class _NewItemsSectionState extends State<_NewItemsSection> {
         SizedBox(height: 10.h),
         BlocBuilder<InventoryCubit, InventoryState>(
           builder: (context, state) {
-            final items = state is InventoryLoaded
-                ? state.filtered.where((i) => i.availableQty > 0).toList()
-                : <ItemEntity>[];
+            // 1. تجميع كل المنتجات المتاحة والفئات
+            List<ItemEntity> allItems = [];
+            List<String> categories = [];
 
-            return Row(
+            if (state is InventoryLoaded) {
+              allItems = state.items.where((i) => i.availableQty > 0).toList();
+
+              categories = allItems
+                  .map((i) => i.category?.name ?? 'بدون فئة')
+                  .toSet()
+                  .toList();
+            }
+
+            final filteredItems = _selectedCategory == null
+                ? allItems
+                : allItems.where((i) => (i.category?.name ?? 'بدون فئة') == _selectedCategory).toList();
+
+            return Column(
               children: [
-                Expanded(
-                  child: AppDropdown<ItemEntity?>(
-                    title: '',
-                    value: _pick,
-                    enabled: items.isNotEmpty,
-                    onChanged: (v) => setState(() => _pick = v),
-                    items: items
-                        .map((i) => DropdownMenuItem(
-                      value: i,
-                      child: Text('${i.name} (×${i.availableQty})',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.sp)),
-                    ))
-                        .toList(),
+                // ─── Dropdown فلتر الفئات ───
+                if (categories.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 10.h),
+                    child: AppDropdown<String?>(
+                      title: '',
+                      value: _selectedCategory,
+                      items: [
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text('جميع الفئات', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: ColorsManager.primaryColor)),
+                        ),
+                        ...categories.map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c, style: TextStyle(fontSize: 13.sp)),
+                        )),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedCategory = val;
+                          _pick = null; // تصفير المنتج لما نغير الفئة عشان ميحصلش ايرور
+                        });
+                      },
+                    ),
                   ),
-                ),
-                SizedBox(width: 10.w),
-                _FlatBtn(
-                  label: 'invoices.add_item_row'.tr(),
-                  icon: Icons.add,
-                  enabled: _pick != null,
-                  onTap: _pick == null
-                      ? () {}
-                      : () {
-                    widget.onAdd(_pick!);
-                    setState(() => _pick = null);
-                  },
+
+                // ─── Dropdown اختيار المنتج ───
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppDropdown<ItemEntity?>(
+                        title: '',
+                        value: _pick,
+                        enabled: filteredItems.isNotEmpty,
+                        onChanged: (v) => setState(() => _pick = v),
+                        items: filteredItems
+                            .map((i) => DropdownMenuItem(
+                          value: i,
+                          child: Text('${i.name} (×${i.availableQty})',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13.sp)),
+                        ))
+                            .toList(),
+                      ),
+                    ),
+                    SizedBox(width: 10.w),
+                    _FlatBtn(
+                      label: 'invoices.add_item_row'.tr(),
+                      icon: Icons.add,
+                      enabled: _pick != null,
+                      onTap: _pick == null
+                          ? () {}
+                          : () {
+                        widget.onAdd(_pick!);
+                        setState(() => _pick = null);
+                      },
+                    ),
+                  ],
                 ),
               ],
             );
@@ -644,7 +775,6 @@ class _NewRowWidget extends StatefulWidget {
 class _NewRowWidgetState extends State<_NewRowWidget> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final r = widget.row;
 
     return Padding(
@@ -684,10 +814,60 @@ class _NewRowWidgetState extends State<_NewRowWidget> {
               return null;
             },
           ),
-          _NumCell(ctrl: r.priceCtrl, allowDecimal: true, onChanged: () {
-            setState(() {});
-            widget.onChanged();
-          }),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _NumCell(
+                  ctrl:         r.priceCtrl,
+                  allowDecimal: true,
+                  onChanged:    () { setState(() {}); widget.onChanged(); }
+              ),
+              if (r.item != null) ...[
+                SizedBox(height: 4.h),
+                PopupMenuButton<double>(
+                  tooltip: 'اختر السعر',
+                  padding: EdgeInsets.zero,
+                  onSelected: (price) {
+                    r.priceCtrl.text = price.toStringAsFixed(0);
+                    setState(() {});
+                    widget.onChanged();
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    decoration: BoxDecoration(
+                      color: ColorsManager.primaryColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(4.r),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('الأسعار', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w600, color: ColorsManager.primaryColor)),
+                        Icon(Icons.arrow_drop_down, size: 12.r, color: ColorsManager.primaryColor),
+                      ],
+                    ),
+                  ),
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: r.item!.defaultPrice,
+                      child: Text('افتراضي: ${r.item!.defaultPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600)),
+                    ),
+                    PopupMenuItem(
+                      value: r.item!.priceFilm,
+                      child: Text('فيلم: ${r.item!.priceFilm.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                    PopupMenuItem(
+                      value: r.item!.priceSeries,
+                      child: Text('مسلسل: ${r.item!.priceSeries.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                    PopupMenuItem(
+                      value: r.item!.priceAd,
+                      child: Text('إعلان: ${r.item!.priceAd.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                  ],
+                ),
+              ]
+            ],
+          ),
           _NumCell(
               ctrl: r.discCtrl,
               allowDecimal: true,
@@ -723,7 +903,7 @@ class _NewRowWidgetState extends State<_NewRowWidget> {
 // ─── Edit footer ──────────────────────────────────────────────────────────────
 
 class _EditFooter extends StatelessWidget {
-  final double oldNet, newNet, additionalDebt;
+  final double oldNet, newNet;
   final bool submitting;
   final double hPad;
   final VoidCallback onSubmit;
@@ -731,20 +911,18 @@ class _EditFooter extends StatelessWidget {
   const _EditFooter(
       {required this.oldNet,
         required this.newNet,
-        required this.additionalDebt,
         required this.submitting,
         required this.hPad,
         required this.onSubmit});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final cur = 'dashboard.currency'.tr();
 
     return Container(
       decoration: BoxDecoration(
-          color: theme.cardColor,
-          border: Border(top: BorderSide(color: theme.dividerColor))),
+          color: Theme.of(context).cardColor,
+          border: Border(top: BorderSide(color: Theme.of(context).dividerColor))),
       padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 14.h),
       child: SafeArea(
         child: Row(
@@ -758,10 +936,10 @@ class _EditFooter extends StatelessWidget {
                 _TLine('invoices.new_net'.tr(),
                     '$cur ${newNet.toStringAsFixed(0)}',
                     bold: true),
-                if (additionalDebt > 0)
-                  _TLine('invoices.additional_debt'.tr(),
-                      '+$cur ${additionalDebt.toStringAsFixed(0)}',
-                      col: ColorsManager.errorText),
+                // if (additionalDebt > 0)
+                //   _TLine('invoices.additional_debt'.tr(),
+                //       '+$cur ${additionalDebt.toStringAsFixed(0)}',
+                //       col: ColorsManager.errorText),
               ],
             ),
             const Spacer(),

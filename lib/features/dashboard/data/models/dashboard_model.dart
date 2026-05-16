@@ -13,10 +13,11 @@ class DashboardModel extends DashboardEntity {
     required super.pendingInvoicesCount,
     required super.customerDebts,
     required super.debtorsCount,
+    required super.supplierDebts,
     required super.monthlyRevenues,
     required super.totalCollectedPercent,
     required super.totalDebtPercent,
-    required super.recentInvoices, // 🚨 اتعدلت هنا
+    required super.recentInvoices,
   });
 
   /// نبني الـ model من نتائج الـ queries
@@ -25,6 +26,7 @@ class DashboardModel extends DashboardEntity {
     required List<Map<String, dynamic>> activeInvoices,
     required List<Map<String, dynamic>> customers,
     required List<Map<String, dynamic>> recentInvoicesRaw,
+    required List<Map<String, dynamic>> supplierDebtsRaw,
     required List<Map<String, dynamic>> monthlyRaw,
     required double previousMonthRevenue,
   }) {
@@ -55,6 +57,16 @@ class DashboardModel extends DashboardEntity {
     final debtorsCount = customers.where(
           (c) => ((c['total_debt'] as num?)?.toDouble() ?? 0) > 0,
     ).length;
+
+    // ── ديون الموردين (المبالغ المستحقة علينا) 🆕 ────────────
+    final supplierDebts = supplierDebtsRaw.fold<double>(
+      0,
+          (sum, inv) {
+        final totalAmount = (inv['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final paidAmount  = (inv['paid_amount']  as num?)?.toDouble() ?? 0.0;
+        return sum + (totalAmount - paidAmount); // الرصيد المتبقي
+      },
+    );
 
     // ── نسب الديون vs المحصّل ─────────────────────────────────
     final grandTotal = totalPaid + customerDebts;
@@ -108,10 +120,11 @@ class DashboardModel extends DashboardEntity {
       pendingInvoicesCount: activeRentals,
       customerDebts: customerDebts,
       debtorsCount: debtorsCount,
+      supplierDebts: supplierDebts,
       monthlyRevenues: monthlyRevenues,
       totalCollectedPercent: collectedPercent,
       totalDebtPercent: debtPercent,
-      recentInvoices: recentInvoices, // 🚨 تمرير الفواتير المجهزة
+      recentInvoices: recentInvoices,
     );
   }
 }

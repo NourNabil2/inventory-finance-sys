@@ -20,6 +20,12 @@ class InvoiceEntity extends Equatable {
   final DateTime createdAt;
   final List<InvoiceItemEntity> items;
 
+  /// Optional free-text job name / project reference
+  final String? jobName;
+
+  /// Optional production / site / location label
+  final String? production;
+
   const InvoiceEntity({
     required this.id,
     required this.customerId,
@@ -30,6 +36,8 @@ class InvoiceEntity extends Equatable {
     required this.createdAt,
     required this.invoiceNumber,
     this.items = const [],
+    this.jobName,
+    this.production,
   });
 
   // ── Computed ──────────────────────────────────────────────────────────
@@ -63,5 +71,5 @@ class InvoiceEntity extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, customerId, totalAmount, discount, status, createdAt, items];
+      [id, customerId, totalAmount, discount, status, createdAt, items, jobName, production];
 }

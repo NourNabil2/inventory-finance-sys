@@ -84,7 +84,7 @@ class LightTheme {
     ),
 
     // Card Theme
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: Colors.white,
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.1),

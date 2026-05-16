@@ -132,7 +132,7 @@ class InvoiceCreateTableHead extends StatelessWidget {
               InvoiceColHdr('invoices.col_qty'.tr(), s),
               InvoiceColHdr('invoices.col_days'.tr(), s),
               InvoiceColHdr('invoices.col_price'.tr(), s),
-              InvoiceColHdr('invoices.col_disc_pct'.tr(), s),
+              InvoiceColHdr('invoices.col_disc_pct'.tr(), s), // 🆕 الخصم موجود بالفعل
               InvoiceColHdr('invoices.col_total'.tr(), s, end: true),
               SizedBox(width: 32.w),
             ],
@@ -351,9 +351,9 @@ class _InvoiceLineRowState extends State<InvoiceLineRow> {
                     ? GestureDetector(
                   onTap: widget.onRemove,
                   child: Icon(
-                    Icons.close,
+                    Icons.close_rounded,
                     size: 16.r,
-                    color: ColorsManager.defaultTextSecondary,
+                    color: ColorsManager.errorFill,
                   ),
                 )
                     : const SizedBox.shrink(),
@@ -362,6 +362,90 @@ class _InvoiceLineRowState extends State<InvoiceLineRow> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// Two free-text fields shown above the items table:
+/// "Job Name" and "Production".
+/// Pass the two controllers from the page's state.
+class InvoiceJobFields extends StatelessWidget {
+  final TextEditingController jobNameCtrl;
+  final TextEditingController productionCtrl;
+
+  const InvoiceJobFields({
+    super.key,
+    required this.jobNameCtrl,
+    required this.productionCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = TextStyle(
+      fontSize: 11.sp,
+      fontWeight: FontWeight.w600,
+      color: ColorsManager.defaultTextSecondary,
+      letterSpacing: 0.2,
+    );
+    final fieldDeco = InputDecoration(
+      isDense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.r),
+        borderSide: BorderSide(color: theme.dividerColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.r),
+        borderSide: BorderSide(color: theme.dividerColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.r),
+        borderSide: BorderSide(color: ColorsManager.primaryColor, width: 1.5),
+      ),
+      filled: true,
+      fillColor: theme.cardColor,
+    );
+
+    return Row(
+      children: [
+        // ── Job Name ──
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.job_name'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: jobNameCtrl,
+                style: TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco.copyWith(
+                  hintText: 'invoices.job_name_hint'.tr(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 12.w),
+        // ── Production ──
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.production'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: productionCtrl,
+                style: TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco.copyWith(
+                  hintText: 'invoices.production_hint'.tr(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

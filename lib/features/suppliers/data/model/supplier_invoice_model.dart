@@ -2,6 +2,8 @@
 
 import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_invoice_entity.dart';
 
+import '../../domain/entities/supplier_invoice_item_entity.dart';
+
 class SupplierInvoiceItemModel extends SupplierInvoiceItemEntity {
   const SupplierInvoiceItemModel({
     required super.id,

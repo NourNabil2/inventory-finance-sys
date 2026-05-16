@@ -29,10 +29,10 @@ class DashboardEntity extends Equatable {
   final List<double> monthlyRevenues;
   final double totalCollectedPercent;
   final double totalDebtPercent;
-  // 🚨 التعديل هنا: غيرنا الاسم لـ recentInvoices بدل topCameras
+  final double supplierDebts;
   final List<RecentInvoiceEntity> recentInvoices;
 
-  const DashboardEntity({
+  const DashboardEntity( {
     required this.totalRevenue,
     required this.previousMonthRevenue,
     required this.activeRentals,
@@ -43,7 +43,9 @@ class DashboardEntity extends Equatable {
     required this.monthlyRevenues,
     required this.totalCollectedPercent,
     required this.totalDebtPercent,
-    required this.recentInvoices, // 🚨 التعديل هنا
+    required this.recentInvoices,
+    required this.supplierDebts,
+
   });
 
   /// Calculate revenue growth percentage from previous month
@@ -64,6 +66,7 @@ class DashboardEntity extends Equatable {
     monthlyRevenues,
     totalCollectedPercent,
     totalDebtPercent,
-    recentInvoices, // 🚨 التعديل هنا
+    recentInvoices,
+    supplierDebts,
   ];
 }

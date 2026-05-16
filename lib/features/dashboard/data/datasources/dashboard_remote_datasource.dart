@@ -62,6 +62,12 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
           .gte('created_at', prevMonthStart)
           .lt('created_at', prevMonthEnd);
 
+      // ── 7. ديون الموردين (الفواتير غير المدفوعة بالكامل) ────
+      final supplierDebtsRes = await _supabase
+          .from('supplier_invoices')
+          .select('total_amount, paid_amount')
+          .neq('status', 'paid'); // كل الفواتير اللي مش مدفوعة بالكامل
+
       // ── تجميع الإيرادات الشهرية يدوياً ───────────────────────
       final monthlyRevenues = _aggregateMonthly(
         List<Map<String, dynamic>>.from(monthlyRes),
@@ -75,7 +81,8 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
         'transactions': List<Map<String, dynamic>>.from(transactionsRes),
         'activeInvoices': List<Map<String, dynamic>>.from(activeInvoicesRes),
         'customers': List<Map<String, dynamic>>.from(customersRes),
-        'recentInvoices': List<Map<String, dynamic>>.from(recentInvoicesRes), // 🚨 إرسال الفواتير الحديثة
+        'recentInvoices': List<Map<String, dynamic>>.from(recentInvoicesRes),
+        'supplierDebts': List<Map<String, dynamic>>.from(supplierDebtsRes),
         'monthlyRevenues': monthlyRevenues,
         'previousMonthRevenue': previousMonthRevenue,
       };

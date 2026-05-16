@@ -2,6 +2,10 @@
 
 import 'package:equatable/equatable.dart';
 
+import 'supplier_invoice_item_entity.dart';
+
+export 'supplier_invoice_item_entity.dart';
+
 enum SupplierInvoiceStatus { unpaid, partial, paid }
 
 class SupplierInvoiceEntity extends Equatable {
@@ -25,7 +29,8 @@ class SupplierInvoiceEntity extends Equatable {
     required this.createdAt,
   });
 
-  double get remaining => (totalAmount - paidAmount).clamp(0, double.infinity);
+  double get remaining =>
+      (totalAmount - paidAmount).clamp(0, double.infinity);
   bool get isFullyPaid => paidAmount >= totalAmount;
   double get paymentPercent =>
       totalAmount == 0 ? 0 : (paidAmount / totalAmount * 100).clamp(0, 100);
@@ -33,28 +38,4 @@ class SupplierInvoiceEntity extends Equatable {
   @override
   List<Object?> get props =>
       [id, supplierId, totalAmount, paidAmount, status, notes, items, createdAt];
-}
-
-class SupplierInvoiceItemEntity extends Equatable {
-  final String id;
-  final String invoiceId;
-  final String itemName;
-  final int qty;
-  final int days;
-  final double pricePerDay;
-
-  const SupplierInvoiceItemEntity({
-    required this.id,
-    required this.invoiceId,
-    required this.itemName,
-    required this.qty,
-    required this.days,
-    required this.pricePerDay,
-  });
-
-  double get lineTotal => qty * days * pricePerDay;
-
-  @override
-  List<Object?> get props =>
-      [id, invoiceId, itemName, qty, days, pricePerDay];
 }

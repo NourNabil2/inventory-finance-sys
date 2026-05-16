@@ -15,6 +15,7 @@ import '../cubit/customers_cubit.dart';
 import '../cubit/invoices_cubit.dart';
 import '../pages/modern_invoice_details_page.dart';
 import '../widgets/customer_widgets/customer_detail_panel.dart';
+import '../widgets/customer_widgets/export_customers_dialog.dart';
 
 class CustomersPage extends StatelessWidget {
   const CustomersPage({super.key});
@@ -98,7 +99,13 @@ class _Header extends StatelessWidget {
         padding: EdgeInsetsDirectional.only(end: 12.w),
         child: OutlinedButton.icon(
           onPressed: () {
-            context.read<CustomersCubit>().exportCustomersToExcel();
+            showDialog(
+              context: context,
+              builder: (_) => BlocProvider.value(
+                value: context.read<CustomersCubit>(),
+                child: const ExportCustomersDialog(),
+              ),
+            );
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: ColorsManager.successText,

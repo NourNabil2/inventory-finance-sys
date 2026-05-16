@@ -226,7 +226,7 @@ class _DesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const collapsedWidth = 64.0;
+    const collapsedWidth = 85.0;
     const expandedWidth = 200.0;
     final sidebarWidth = sidebarExpanded ? expandedWidth.w : collapsedWidth;
 
@@ -249,22 +249,12 @@ class _DesktopLayout extends StatelessWidget {
                     expanded: sidebarExpanded,
                     onTap: onToggleSidebar,
                   ),
-
-                  if (sidebarExpanded)
-                    CustomLottieIcon(
-                      assetPath: Assets.cameraLotti,
-                      width: 120.w,
-                      height: 120.w,
-                      repeat: true,
-                    )
-                  else
-                    SizedBox(height: 12.h),
-
                   Divider(color: Theme.of(context).dividerColor, height: 1),
                   SizedBox(height: 8.h),
 
                   Expanded(
                     child: ListView.builder(
+
                       itemCount: kNavItems.length,
                       itemBuilder: (_, i) => _NavTile(
                         item: kNavItems[i],
@@ -311,23 +301,16 @@ class _ToggleButton extends StatelessWidget {
         children: [
           if (expanded)
             Flexible(
-              child: Text(
-                'app.name'.tr(),
-                style: TextStyle(
-                  color: ColorsManager.primaryColor,
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.bold,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: InkWell(
+                  onTap: onTap,
+                  child: Image.asset(Assets.logoApp, width: 300.w, height: 120.h, fit: BoxFit.contain)),
             ),
-          IconButton(
-            icon: Icon(
-              expanded ? Icons.arrow_forward_ios : Icons.arrow_back_ios,
-              size: 12.r,
+          if (!expanded)
+            Flexible(
+              child: InkWell(
+                  onTap: onTap,
+                  child: Image.asset(Assets.sLogoApp, width: 300.w, height: 100.h, fit: BoxFit.contain)),
             ),
-            onPressed: onTap,
-          ),
         ],
       ),
     );
@@ -351,7 +334,9 @@ class _NavTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
         margin: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         decoration: BoxDecoration(
@@ -362,30 +347,46 @@ class _NavTile extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
           children: [
             Icon(
               item.icon,
               color: isSelected
                   ? ColorsManager.primaryColor
                   : Theme.of(context).iconTheme.color,
-              size: 20.r,
+              size: 25.r,
             ),
-            if (expanded) ...[
-              SizedBox(width: 10.w),
-              Flexible(
-                child: Text(
-                  item.labelKey.tr(),
-                  style: TextStyle(
-                    color: isSelected
-                        ? ColorsManager.primaryColor
-                        : Theme.of(context).textTheme.bodyMedium?.color,
-                    fontSize: 13.sp,
+            // AnimatedSize لعمل تأثير تمدد وانكماش للنص
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: expanded
+                  ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: 10.w),
+                  // ✅ الحل هنا: الـ Flexible هو الأب المباشر للـ Row
+                  Flexible(
+                    child: AnimatedOpacity( // ✅ والـ AnimatedOpacity جواه
+                      duration: const Duration(milliseconds: 250),
+                      opacity: expanded ? 1.0 : 0.0,
+                      child: Text(
+                        item.labelKey.tr(),
+                        style: TextStyle(
+                          color: isSelected
+                              ? ColorsManager.primaryColor
+                              : Theme.of(context).textTheme.bodyMedium?.color,
+                          fontSize: 13.sp,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ),
-            ],
+                ],
+              )
+                  : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),

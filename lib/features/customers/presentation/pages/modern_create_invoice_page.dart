@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:uuid/uuid.dart';
-import 'package:bungee_manage_sys/core/widgets/app_dropdown.dart'; // Keep for payment method
+import 'package:bungee_manage_sys/core/widgets/app_dropdown.dart';
 
 class ModernCreateInvoicePage extends StatefulWidget {
   final CustomerEntity customer;
@@ -26,32 +26,60 @@ class ModernCreateInvoicePage extends StatefulWidget {
 }
 
 class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey        = GlobalKey<FormState>();
   final List<_LineState> _lines = [];
-  final _invDiscCtrl = TextEditingController(text: '0');
-  final _amtPaidCtrl = TextEditingController(text: '0');
+  final _invDiscCtrl    = TextEditingController(text: '0');
+  final _amtPaidCtrl    = TextEditingController(text: '0');
+
+  final _jobNameCtrl    = TextEditingController();
+  final _productionCtrl = TextEditingController();
+
+  // 🚨 1. متغير لتخزين تاريخ الفاتورة المختار 🚨
+  DateTime _invoiceDate = DateTime.now();
+
   String _payMethod = 'safe';
-  bool _submitting = false;
+  bool   _submitting = false;
 
   @override
   void dispose() {
     for (final l in _lines) l.dispose();
     _invDiscCtrl.dispose();
     _amtPaidCtrl.dispose();
+    _jobNameCtrl.dispose();
+    _productionCtrl.dispose();
     super.dispose();
   }
 
-  double get _subtotal => _lines.fold(0.0, (s, l) => s + l.lineNet);
-  double get _invDiscPct =>
-      (double.tryParse(_invDiscCtrl.text) ?? 0).clamp(0, 100);
+  double get _subtotal    => _lines.fold(0.0, (s, l) => s + l.lineNet);
+  double get _invDiscPct  => (double.tryParse(_invDiscCtrl.text) ?? 0).clamp(0, 100);
   double get _invDiscFlat => _subtotal * (_invDiscPct / 100);
-  double get _netTotal =>
-      (_subtotal - _invDiscFlat).clamp(0, double.infinity);
-  double get _amtPaid =>
-      (double.tryParse(_amtPaidCtrl.text) ?? 0).clamp(0, _netTotal);
-  double get _remaining => _netTotal - _amtPaid;
+  double get _netTotal    => (_subtotal - _invDiscFlat).clamp(0, double.infinity);
+  double get _amtPaid     => (double.tryParse(_amtPaidCtrl.text) ?? 0).clamp(0, _netTotal);
+  double get _remaining   => _netTotal - _amtPaid;
 
-  Future<void> _submit() async {
+  // 🚨 دالة اختيار التاريخ 🚨
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _invoiceDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(primary: ColorsManager.primaryColor),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _invoiceDate = picked);
+    }
+  }
+
+  // 🚨 2. الدالة بقت تستقبل isDraft لتحديد نوع الفاتورة 🚨
+  Future<void> _submit({bool isDraft = false}) async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_lines.isEmpty) {
       context.showError('invoices.error_no_items'.tr());
@@ -59,8 +87,8 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
     }
     for (int i = 0; i < _lines.length; i++) {
       if (_lines[i].item == null) {
-        context.showError('invoices.error_row_no_item'
-            .tr(namedArgs: {'row': '${i + 1}'}));
+        context.showError(
+            'invoices.error_row_no_item'.tr(namedArgs: {'row': '${i + 1}'}));
         return;
       }
     }
@@ -68,33 +96,41 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
     setState(() => _submitting = true);
 
     final resolvedItems = _lines.map((l) => InvoiceItemEntity(
-      id: '',
-      invoiceId: '',
-      itemId: l.item!.id,
-      itemName: l.item!.name,
-      qty: l.qty,
-      days: l.days,
-      pricePerDay: l.pricePerDay,
+      id:           '',
+      invoiceId:    '',
+      itemId:       l.item!.id,
+      itemName:     l.item!.name,
+      qty:          l.qty,
+      days:         l.days,
+      pricePerDay:  l.pricePerDay,
       itemDiscount: l.flatDiscount,
-      status: InvoiceItemStatus.out,
+      isSubRented:  l.isSubRented,
+      status:       InvoiceItemStatus.out,
     )).toList();
 
+    final jobName    = _jobNameCtrl.text.trim().isEmpty    ? null : _jobNameCtrl.text.trim();
+    final production = _productionCtrl.text.trim().isEmpty ? null : _productionCtrl.text.trim();
+
     final invoice = InvoiceEntity(
-      id: const Uuid().v4(),
-      customerId: widget.customer.id,
-      totalAmount: _subtotal,
-      discount: _invDiscFlat,
-      status: InvoiceStatus.active,
+      id:           const Uuid().v4(),
+      customerId:   widget.customer.id,
+      totalAmount:  _subtotal,
+      discount:     _invDiscFlat,
+      // 🚨 تحديد الحالة والتاريخ المختار 🚨
+      status:       isDraft ? InvoiceStatus.draft : InvoiceStatus.active,
+      createdAt:    _invoiceDate,
       invoiceNumber: '',
-      createdAt: DateTime.now(),
+      jobName:      jobName,
+      production:   production,
     );
 
     if (!mounted) return;
     context.read<InvoicesCubit>().createInvoiceWithPayment(
-      invoice: invoice,
-      items: resolvedItems,
-      amountPaid: _amtPaid,
-      method: _payMethod,
+      invoice:     invoice,
+      items:       resolvedItems,
+      // لو مسودة مش هنسجل أي دفعة مالية
+      amountPaid:  isDraft ? 0.0 : _amtPaid,
+      method:      _payMethod,
     );
   }
 
@@ -126,12 +162,25 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _CustomerBadge(customer: widget.customer),
+                      SizedBox(height: 16.h),
+
+                      // 🚨 ويدجت اختيار التاريخ 🚨
+                      _InvoiceDateRow(
+                        date: _invoiceDate,
+                        onTap: _pickDate,
+                      ),
+                      SizedBox(height: 16.h),
+
+                      _JobProductionRow(
+                        jobNameCtrl:    _jobNameCtrl,
+                        productionCtrl: _productionCtrl,
+                      ),
                       SizedBox(height: 20.h),
+
                       _ItemPickerSection(
-                        lines: _lines,
-                        onAdd: (item) =>
-                            setState(() => _lines.add(_LineState(item: item))),
-                        onRemove: (i) => setState(() {
+                        lines:     _lines,
+                        onAdd:     (item) => setState(() => _lines.add(_LineState(item: item))),
+                        onRemove:  (i) => setState(() {
                           _lines[i].dispose();
                           _lines.removeAt(i);
                         }),
@@ -143,20 +192,20 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
               ),
             ),
             _Footer(
-              subtotal: _subtotal,
-              invDiscPct: _invDiscPct,
-              invDiscFlat: _invDiscFlat,
-              netTotal: _netTotal,
-              amtPaid: _amtPaid,
-              remaining: _remaining,
-              invDiscCtrl: _invDiscCtrl,
-              amtPaidCtrl: _amtPaidCtrl,
-              payMethod: _payMethod,
-              submitting: _submitting,
-              hPad: _hPad(context),
+              subtotal:        _subtotal,
+              invDiscPct:      _invDiscPct,
+              invDiscFlat:     _invDiscFlat,
+              netTotal:        _netTotal,
+              amtPaid:         _amtPaid,
+              remaining:       _remaining,
+              invDiscCtrl:     _invDiscCtrl,
+              amtPaidCtrl:     _amtPaidCtrl,
+              payMethod:       _payMethod,
+              submitting:      _submitting,
+              hPad:            _hPad(context),
               onMethodChanged: (v) => setState(() => _payMethod = v),
-              onChanged: () => setState(() {}),
-              onSubmit: _submit,
+              onChanged:       () => setState(() {}),
+              onSubmit:        (isDraft) => _submit(isDraft: isDraft), // 👈
             ),
           ],
         ),
@@ -165,9 +214,9 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
   }
 
   AppBar _buildAppBar(ThemeData theme) => AppBar(
-    backgroundColor: theme.cardColor,
-    surfaceTintColor: Colors.transparent,
-    elevation: 0,
+    backgroundColor:    theme.cardColor,
+    surfaceTintColor:   Colors.transparent,
+    elevation:          0,
     bottom: PreferredSize(
       preferredSize: const Size.fromHeight(1),
       child: Container(height: 1, color: theme.dividerColor),
@@ -194,8 +243,135 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
   double _hPad(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
     if (w > 1200) return (w - 920) / 2;
-    if (w > 700) return 40.w;
+    if (w > 700)  return 40.w;
     return 16.w;
+  }
+}
+
+// ─── ويدجت اختيار التاريخ ─────────────────────────────────────────────────────
+
+class _InvoiceDateRow extends StatelessWidget {
+  final DateTime date;
+  final VoidCallback onTap;
+
+  const _InvoiceDateRow({required this.date, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fmt = DateFormat('EEEE, d MMMM yyyy', 'ar'); // صيغة التاريخ
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.r),
+              decoration: BoxDecoration(
+                color: ColorsManager.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6.r),
+              ),
+              child: Icon(Icons.calendar_month_rounded, size: 20.r, color: ColorsManager.primaryColor),
+            ),
+            SizedBox(width: 12.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('تاريخ الفاتورة', style: TextStyle(fontSize: 11.sp, color: ColorsManager.defaultTextSecondary, fontWeight: FontWeight.w600)),
+                SizedBox(height: 2.h),
+                Text(fmt.format(date), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: theme.textTheme.bodyMedium?.color)),
+              ],
+            ),
+            const Spacer(),
+            Text('تعديل', style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w700, color: ColorsManager.primaryColor)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Job Name + Production row ────────────────────────────────────────────────
+
+class _JobProductionRow extends StatelessWidget {
+  final TextEditingController jobNameCtrl;
+  final TextEditingController productionCtrl;
+
+  const _JobProductionRow({
+    required this.jobNameCtrl,
+    required this.productionCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final labelStyle = TextStyle(
+      fontSize:    11.sp,
+      fontWeight:  FontWeight.w600,
+      color:       ColorsManager.defaultTextSecondary,
+      letterSpacing: 0.2,
+    );
+
+    InputDecoration fieldDeco(String hint) => InputDecoration(
+      isDense:  true,
+      hintText: hint,
+      hintStyle: TextStyle(
+          fontSize: 12.sp, color: ColorsManager.defaultTextSecondary),
+      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      filled:    true,
+      fillColor: theme.cardColor,
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.r),
+          borderSide: BorderSide(color: theme.dividerColor)),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.r),
+          borderSide: BorderSide(color: theme.dividerColor)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.r),
+          borderSide: BorderSide(color: ColorsManager.primaryColor, width: 1.5)),
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.job_name'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: jobNameCtrl,
+                style:      TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco('invoices.job_name_hint'.tr()),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('invoices.production'.tr(), style: labelStyle),
+              SizedBox(height: 4.h),
+              TextField(
+                controller: productionCtrl,
+                style:      TextStyle(fontSize: 13.sp),
+                decoration: fieldDeco('invoices.production_hint'.tr()),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -207,27 +383,27 @@ class _CustomerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme  = Theme.of(context);
     final letter = customer.name.trim().isEmpty
         ? '?'
         : customer.name.trim()[0].toUpperCase();
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color:        theme.cardColor,
         borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: theme.dividerColor),
+        border:       Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 18.r,
+            radius:          18.r,
             backgroundColor: ColorsManager.primaryColor.withOpacity(0.12),
             child: Text(letter,
                 style: TextStyle(
-                    color: ColorsManager.primaryColor,
+                    color:      ColorsManager.primaryColor,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13.sp)),
+                    fontSize:   13.sp)),
           ),
           SizedBox(width: 12.w),
           Expanded(
@@ -237,13 +413,13 @@ class _CustomerBadge extends StatelessWidget {
                 Text(customer.name,
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 14.sp,
-                        color: theme.textTheme.titleSmall?.color)),
+                        fontSize:   14.sp,
+                        color:      theme.textTheme.titleSmall?.color)),
                 if (customer.phone != null)
                   Text(customer.phone!,
                       style: TextStyle(
                           fontSize: 12.sp,
-                          color: ColorsManager.defaultTextSecondary)),
+                          color:    ColorsManager.defaultTextSecondary)),
               ],
             ),
           ),
@@ -251,7 +427,7 @@ class _CustomerBadge extends StatelessWidget {
             Container(
               padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
               decoration: BoxDecoration(
-                  color: ColorsManager.errorSurface,
+                  color:        ColorsManager.errorSurface,
                   borderRadius: BorderRadius.circular(6.r)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -262,9 +438,9 @@ class _CustomerBadge extends StatelessWidget {
                   Text(
                       '${'dashboard.currency'.tr()} ${customer.totalDebt.toStringAsFixed(0)}',
                       style: TextStyle(
-                          fontSize: 12.sp,
+                          fontSize:   12.sp,
                           fontWeight: FontWeight.w700,
-                          color: ColorsManager.errorText)),
+                          color:      ColorsManager.errorText)),
                 ],
               ),
             ),
@@ -274,19 +450,19 @@ class _CustomerBadge extends StatelessWidget {
   }
 }
 
-// ─── Items section (Searchable) ───────────────────────────────────────────────
+// ─── Items section ────────────────────────────────────────────────────────────
 
 class _ItemPickerSection extends StatefulWidget {
-  final List<_LineState> lines;
+  final List<_LineState>       lines;
   final void Function(ItemEntity) onAdd;
-  final void Function(int) onRemove;
-  final VoidCallback onChanged;
+  final void Function(int)     onRemove;
+  final VoidCallback           onChanged;
 
   const _ItemPickerSection({
     required this.lines,
     required this.onAdd,
     required this.onRemove,
-    required this.onChanged
+    required this.onChanged,
   });
 
   @override
@@ -295,8 +471,9 @@ class _ItemPickerSection extends StatefulWidget {
 
 class _ItemPickerSectionState extends State<_ItemPickerSection> {
   ItemEntity? _pick;
+  String? _selectedCategory;
   final _searchCtrl = TextEditingController();
-  final _focusNode = FocusNode();
+  final _focusNode  = FocusNode();
 
   @override
   void dispose() {
@@ -321,139 +498,200 @@ class _ItemPickerSectionState extends State<_ItemPickerSection> {
                   child: CircularProgressIndicator(strokeWidth: 2));
             }
 
-            final items = state is InventoryLoaded
+            final allItems = state is InventoryLoaded
                 ? state.filtered.where((i) => i.availableQty > 0).toList()
                 : <ItemEntity>[];
 
-            return Row(
+            final categories = allItems
+                .map((i) => i.category?.name ?? 'بدون فئة')
+                .toSet()
+                .toList();
+
+            final filteredItems = _selectedCategory == null
+                ? allItems
+                : allItems.where((i) => (i.category?.name ?? 'بدون فئة') == _selectedCategory).toList();
+
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: RawAutocomplete<ItemEntity>(
-                    textEditingController: _searchCtrl,
-                    focusNode: _focusNode,
-                    displayStringForOption: (item) => item.name,
-                    optionsBuilder: (TextEditingValue v) {
-                      final query = v.text.toLowerCase().trim();
-                      if (query.isEmpty) return items;
-                      return items.where((i) =>
-                      i.name.toLowerCase().contains(query) ||
-                          (i.model?.toLowerCase().contains(query) ?? false));
-                    },
-                    onSelected: (selection) {
-                      setState(() => _pick = selection);
-                    },
-                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        style: TextStyle(fontSize: 13.sp),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: 'ابحث عن صنف لاختياره...',
-                          hintStyle: TextStyle(fontSize: 12.sp, color: ColorsManager.defaultTextSecondary),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                          filled: true,
-                          fillColor: theme.cardColor,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6.r),
-                              borderSide: BorderSide(color: theme.dividerColor)),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6.r),
-                              borderSide: BorderSide(color: theme.dividerColor)),
-                          focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6.r),
-                              borderSide: BorderSide(color: ColorsManager.primaryColor)),
-                          prefixIcon: Icon(Icons.search, size: 18.r, color: ColorsManager.defaultTextSecondary),
-                          // علامة صح خضرا لما يختار منتج صح
-                          suffixIcon: _pick != null
-                              ? Icon(Icons.check_circle, size: 18.r, color: ColorsManager.successFill)
-                              : null,
+                if (categories.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 12.h),
+                    child: AppDropdown<String?>(
+                      title: '',
+                      value: _selectedCategory,
+                      items: [
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text('جميع الفئات', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: ColorsManager.primaryColor)),
                         ),
-                        onChanged: (_) {
-                          // 🚨 لو مسح أو كتب حاجة بإيده، نلغي الاختيار ونقفل زرار الإضافة 🚨
-                          if (_pick != null) setState(() => _pick = null);
-                        },
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: AlignmentDirectional.topStart,
-                        child: Material(
-                          elevation: 8,
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(8.r),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(maxHeight: 250.h, maxWidth: 300.w),
-                            child: ListView.separated(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              separatorBuilder: (_, __) => Divider(height: 1, color: theme.dividerColor),
-                              itemBuilder: (context, index) {
-                                final item = options.elementAt(index);
-                                return InkWell(
-                                  onTap: () => onSelected(item),
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            item.name,
-                                            style: TextStyle(
-                                              fontSize: 13.sp,
-                                              fontWeight: FontWeight.w500,
-                                              color: theme.textTheme.bodyMedium?.color,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8.w),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                                          decoration: BoxDecoration(
-                                            color: ColorsManager.primaryColor.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(4.r),
-                                          ),
-                                          child: Text(
-                                            'متوفر: ${item.availableQty}',
-                                            style: TextStyle(
-                                              fontSize: 11.sp,
-                                              fontWeight: FontWeight.w600,
-                                              color: ColorsManager.primaryColor,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                        ...categories.map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c, style: TextStyle(fontSize: 13.sp)),
+                        )),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedCategory = val;
+                          _pick = null;
+                          _searchCtrl.clear();
+                          _focusNode.unfocus();
+                        });
+                      },
+                    ),
                   ),
-                ),
-                SizedBox(width: 10.w),
-                _FlatBtn(
-                  label: 'invoices.add_item_row'.tr(),
-                  icon: Icons.add,
-                  // الزرار مش هيشتغل غير لو اختار منتج من القائمة فعلاً
-                  enabled: _pick != null,
-                  onTap: _pick == null
-                      ? () {}
-                      : () {
-                    widget.onAdd(_pick!);
-                    setState(() {
-                      _pick = null;
-                      _searchCtrl.clear(); // نفضي الحقل عشان يختار اللي بعده
-                      _focusNode.requestFocus(); // نرجع الماوس للحقل تاني لسرعة الإدخال
-                    });
-                  },
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: RawAutocomplete<ItemEntity>(
+                        key: ValueKey(_selectedCategory),
+                        textEditingController: _searchCtrl,
+                        focusNode:             _focusNode,
+                        displayStringForOption: (item) => item.name,
+                        optionsBuilder: (TextEditingValue v) {
+                          final query = v.text.toLowerCase().trim();
+                          if (query.isEmpty) return filteredItems;
+                          return filteredItems.where((i) =>
+                          i.name.toLowerCase().contains(query) ||
+                              (i.model?.toLowerCase().contains(query) ?? false));
+                        },
+                        onSelected: (selection) {
+                          setState(() => _pick = selection);
+                        },
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode:  focusNode,
+                            onTap: () {
+                              controller.notifyListeners();
+                            },
+                            style: TextStyle(fontSize: 13.sp),
+                            decoration: InputDecoration(
+                              isDense:   true,
+                              hintText:  'ابحث عن صنف لاختياره...',
+                              hintStyle: TextStyle(
+                                  fontSize: 12.sp,
+                                  color:    ColorsManager.defaultTextSecondary),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12.w, vertical: 10.h),
+                              filled:    true,
+                              fillColor: theme.cardColor,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: theme.dividerColor)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: theme.dividerColor)),
+                              focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: ColorsManager.primaryColor)),
+                              prefixIcon: Icon(Icons.search,
+                                  size:  18.r,
+                                  color: ColorsManager.defaultTextSecondary),
+                              suffixIcon: (_pick != null || controller.text.isNotEmpty)
+                                  ? IconButton(
+                                icon: Icon(Icons.close, size: 18.r, color: ColorsManager.errorText),
+                                onPressed: () {
+                                  setState(() {
+                                    _pick = null;
+                                    _searchCtrl.clear();
+                                    _focusNode.unfocus();
+                                  });
+                                },
+                              )
+                                  : null,
+                            ),
+                            onChanged: (_) {
+                              if (_pick != null) setState(() => _pick = null);
+                            },
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: AlignmentDirectional.topStart,
+                            child: Material(
+                              elevation:    8,
+                              color:        theme.cardColor,
+                              borderRadius: BorderRadius.circular(8.r),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                    maxHeight: 250.h, maxWidth: 300.w),
+                                child: ListView.separated(
+                                  padding:      EdgeInsets.zero,
+                                  shrinkWrap:   true,
+                                  itemCount:    options.length,
+                                  separatorBuilder: (_, __) =>
+                                      Divider(height: 1, color: theme.dividerColor),
+                                  itemBuilder: (context, index) {
+                                    final item = options.elementAt(index);
+                                    return InkWell(
+                                      onTap: () => onSelected(item),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 12.w, vertical: 10.h),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(item.name,
+                                                  style: TextStyle(
+                                                      fontSize:   13.sp,
+                                                      fontWeight: FontWeight.w500,
+                                                      color:      theme.textTheme
+                                                          .bodyMedium?.color),
+                                                  overflow: TextOverflow.ellipsis),
+                                            ),
+                                            SizedBox(width: 8.w),
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 6.w, vertical: 2.h),
+                                              decoration: BoxDecoration(
+                                                color: ColorsManager.primaryColor
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                BorderRadius.circular(4.r),
+                                              ),
+                                              child: Text(
+                                                'متوفر: ${item.availableQty}',
+                                                style: TextStyle(
+                                                    fontSize:   11.sp,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: ColorsManager.primaryColor),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 10.w),
+                    _FlatBtn(
+                      label:   'invoices.add_item_row'.tr(),
+                      icon:    Icons.add,
+                      enabled: _pick != null,
+                      onTap:   _pick == null
+                          ? () {}
+                          : () {
+                        widget.onAdd(_pick!);
+                        setState(() {
+                          _pick = null;
+                          _searchCtrl.clear();
+                          _focusNode.requestFocus();
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ],
             );
@@ -462,9 +700,9 @@ class _ItemPickerSectionState extends State<_ItemPickerSection> {
         SizedBox(height: 14.h),
         Container(
           decoration: BoxDecoration(
-              color: theme.cardColor,
+              color:        theme.cardColor,
               borderRadius: BorderRadius.circular(8.r),
-              border: Border.all(color: theme.dividerColor)),
+              border:       Border.all(color: theme.dividerColor)),
           child: widget.lines.isEmpty
               ? _EmptyPlaceholder()
               : Column(children: [
@@ -472,10 +710,10 @@ class _ItemPickerSectionState extends State<_ItemPickerSection> {
             ...widget.lines.asMap().entries.map((e) => Column(children: [
               Container(height: 1, color: theme.dividerColor),
               _LineRow(
-                key: ValueKey(e.key),
-                line: e.value,
-                canRemove: widget.lines.length > 1,
-                onRemove: () => widget.onRemove(e.key),
+                key:       ValueKey(e.key),
+                line:      e.value,
+                canRemove: true,
+                onRemove:  () => widget.onRemove(e.key),
                 onChanged: widget.onChanged,
               ),
             ])),
@@ -498,7 +736,7 @@ class _EmptyPlaceholder extends StatelessWidget {
           Text('invoices.no_items_yet'.tr(),
               style: TextStyle(
                   fontSize: 13.sp,
-                  color: ColorsManager.defaultTextSecondary)),
+                  color:    ColorsManager.defaultTextSecondary)),
         ])),
   );
 }
@@ -510,24 +748,22 @@ class _TableHead extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = TextStyle(
-        fontSize: 11.sp,
-        fontWeight: FontWeight.w600,
-        color: ColorsManager.defaultTextSecondary,
+        fontSize:     11.sp,
+        fontWeight:   FontWeight.w600,
+        color:        ColorsManager.defaultTextSecondary,
         letterSpacing: 0.3);
 
     return Container(
-      color: theme.scaffoldBackgroundColor,
+      color:   theme.scaffoldBackgroundColor,
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
       child: Row(
         children: [
-          Expanded(
-              flex: 4,
-              child: Text('invoices.col_item'.tr(), style: style)),
-          _Hdr('invoices.col_qty'.tr(), style),
-          _Hdr('invoices.col_days'.tr(), style),
-          _Hdr('invoices.col_price'.tr(), style),
+          Expanded(flex: 4, child: Text('invoices.col_item'.tr(), style: style)),
+          _Hdr('invoices.col_qty'.tr(),      style),
+          _Hdr('invoices.col_days'.tr(),     style),
+          _Hdr('invoices.col_price'.tr(),    style),
           _Hdr('invoices.col_disc_pct'.tr(), style),
-          _Hdr('invoices.col_total'.tr(), style, end: true),
+          _Hdr('invoices.col_total'.tr(),    style, end: true),
           SizedBox(width: 32.w),
         ],
       ),
@@ -536,33 +772,35 @@ class _TableHead extends StatelessWidget {
 }
 
 class _Hdr extends StatelessWidget {
-  final String t;
+  final String    t;
   final TextStyle s;
-  final bool end;
+  final bool      end;
   const _Hdr(this.t, this.s, {this.end = false});
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: 70.w,
     child: Text(t,
-        style: s, textAlign: end ? TextAlign.end : TextAlign.center),
+        style:     s,
+        textAlign: end ? TextAlign.end : TextAlign.center),
   );
 }
 
 // ─── Line row ─────────────────────────────────────────────────────────────────
 
 class _LineRow extends StatefulWidget {
-  final _LineState line;
-  final bool canRemove;
+  final _LineState   line;
+  final bool         canRemove;
   final VoidCallback onRemove;
   final VoidCallback onChanged;
 
-  const _LineRow(
-      {super.key,
-        required this.line,
-        required this.canRemove,
-        required this.onRemove,
-        required this.onChanged});
+  const _LineRow({
+    super.key,
+    required this.line,
+    required this.canRemove,
+    required this.onRemove,
+    required this.onChanged,
+  });
 
   @override
   State<_LineRow> createState() => _LineRowState();
@@ -572,7 +810,7 @@ class _LineRowState extends State<_LineRow> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = widget.line;
+    final l     = widget.line;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       child: Row(
@@ -586,71 +824,138 @@ class _LineRowState extends State<_LineRow> {
                 Text(l.item?.name ?? '—',
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 13.sp,
-                        color: theme.textTheme.bodyMedium?.color),
+                        fontSize:   13.sp,
+                        color:      theme.textTheme.bodyMedium?.color),
                     overflow: TextOverflow.ellipsis),
                 if (l.item != null)
-                  Text(
-                      '×${l.item!.availableQty} ${'invoices.available'.tr()}',
-                      style: TextStyle(
-                          fontSize: 11.sp,
-                          color: ColorsManager.defaultTextSecondary)),
+                  Row(
+                    children: [
+                      Text('×${l.item!.availableQty} ${'invoices.available'.tr()}',
+                          style: TextStyle(
+                              fontSize: 11.sp,
+                              color:    ColorsManager.defaultTextSecondary)),
+                      SizedBox(width: 8.w),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            l.isSubRented = !l.isSubRented;
+                          });
+                          widget.onChanged();
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                          decoration: BoxDecoration(
+                            color: l.isSubRented ? ColorsManager.primaryColor.withOpacity(0.1) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(4.r),
+                            border: Border.all(color: l.isSubRented ? ColorsManager.primaryColor : theme.dividerColor),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                l.isSubRented ? Icons.check_box : Icons.check_box_outline_blank,
+                                size: 12.r,
+                                color: l.isSubRented ? ColorsManager.primaryColor : ColorsManager.defaultTextSecondary,
+                              ),
+                              SizedBox(width: 4.w),
+                              Text(
+                                'تكملة من الخارج',
+                                style: TextStyle(
+                                  fontSize: 9.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: l.isSubRented ? ColorsManager.primaryColor : ColorsManager.defaultTextSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
           _NumCell(
-              ctrl: l.qtyCtrl,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                if (n == null || n < 1) return '≥1';
-                if (l.item != null && n > l.item!.availableQty) {
-                  return '≤${l.item!.availableQty}';
-                }
-                return null;
-              }),
-          _NumCell(
-              ctrl: l.daysCtrl,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
+              ctrl:      l.qtyCtrl,
+              onChanged: () { setState(() {}); widget.onChanged(); },
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 if (n == null || n < 1) return '≥1';
                 return null;
               }),
           _NumCell(
-              ctrl: l.priceCtrl,
-              allowDecimal: true,
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              }),
-          _NumCell(
-              ctrl: l.discCtrl,
-              allowDecimal: true,
-              suffix: '%',
-              onChanged: () {
-                setState(() {});
-                widget.onChanged();
-              },
+              ctrl:      l.daysCtrl,
+              onChanged: () { setState(() {}); widget.onChanged(); },
               validator: (v) {
-                final n = double.tryParse(v ?? '');
-                if (n == null || n < 0 || n > 100) return '0–100';
+                final n = int.tryParse(v ?? '');
+                if (n == null || n < 1) return '≥1';
                 return null;
               }),
+          _NumCell(
+              ctrl:         l.priceCtrl,
+              allowDecimal: true,
+              onChanged:    () { setState(() {}); widget.onChanged(); }),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _NumCell(
+                  ctrl:         l.priceCtrl,
+                  allowDecimal: true,
+                  onChanged:    () { setState(() {}); widget.onChanged(); }),
+              if (l.item != null) ...[
+                SizedBox(height: 4.h),
+                PopupMenuButton<double>(
+                  tooltip: 'اختر السعر',
+                  padding: EdgeInsets.zero,
+                  onSelected: (price) {
+                    l.priceCtrl.text = price.toStringAsFixed(0);
+                    setState(() {});
+                    widget.onChanged();
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    decoration: BoxDecoration(
+                      color: ColorsManager.primaryColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(4.r),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('الأسعار', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w600, color: ColorsManager.primaryColor)),
+                        Icon(Icons.arrow_drop_down, size: 12.r, color: ColorsManager.primaryColor),
+                      ],
+                    ),
+                  ),
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: l.item!.defaultPrice,
+                      child: Text('افتراضي: ${l.item!.defaultPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600)),
+                    ),
+                    PopupMenuItem(
+                      value: l.item!.priceFilm,
+                      child: Text('فيلم: ${l.item!.priceFilm.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                    PopupMenuItem(
+                      value: l.item!.priceSeries,
+                      child: Text('مسلسل: ${l.item!.priceSeries.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                    PopupMenuItem(
+                      value: l.item!.priceAd,
+                      child: Text('إعلان: ${l.item!.priceAd.toStringAsFixed(0)}', style: TextStyle(fontSize: 11.sp)),
+                    ),
+                  ],
+                ),
+              ]
+            ],
+          ),
           SizedBox(
             width: 70.w,
             child: Text(
               l.lineNet.toStringAsFixed(0),
               style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  fontSize: 13.sp,
-                  color: theme.textTheme.bodyMedium?.color),
+                  fontSize:   13.sp,
+                  color:      theme.textTheme.bodyMedium?.color),
               textAlign: TextAlign.end,
             ),
           ),
@@ -658,10 +963,10 @@ class _LineRowState extends State<_LineRow> {
             width: 32.w,
             child: widget.canRemove
                 ? GestureDetector(
-              onTap: widget.onRemove,
-              child: Icon(Icons.close,
-                  size: 16.r,
-                  color: ColorsManager.defaultTextSecondary),
+              onTap:  widget.onRemove,
+              child:  Icon(Icons.close,
+                  size:  16.r,
+                  color: ColorsManager.errorText),
             )
                 : const SizedBox.shrink(),
           ),
@@ -672,18 +977,19 @@ class _LineRowState extends State<_LineRow> {
 }
 
 class _NumCell extends StatelessWidget {
-  final TextEditingController ctrl;
-  final bool allowDecimal;
-  final String? suffix;
-  final VoidCallback? onChanged;
+  final TextEditingController     ctrl;
+  final bool                      allowDecimal;
+  final String?                   suffix;
+  final VoidCallback?             onChanged;
   final FormFieldValidator<String>? validator;
 
-  const _NumCell(
-      {required this.ctrl,
-        this.allowDecimal = false,
-        this.suffix,
-        this.onChanged,
-        this.validator});
+  const _NumCell({
+    required this.ctrl,
+    this.allowDecimal = false,
+    this.suffix,
+    this.onChanged,
+    this.validator,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -691,35 +997,33 @@ class _NumCell extends StatelessWidget {
     return SizedBox(
       width: 70.w,
       child: TextFormField(
-        controller: ctrl,
-        keyboardType:
-        TextInputType.numberWithOptions(decimal: allowDecimal),
-        textAlign: TextAlign.center,
+        controller:   ctrl,
+        keyboardType: TextInputType.numberWithOptions(decimal: allowDecimal),
+        textAlign:    TextAlign.center,
         style: TextStyle(
             fontSize: 13.sp, color: theme.textTheme.bodyMedium?.color),
         onChanged: (_) => onChanged?.call(),
-        validator: validator,
+        validator:    validator,
         decoration: InputDecoration(
-          isDense: true,
-          contentPadding:
-          EdgeInsets.symmetric(horizontal: 6.w, vertical: 8.h),
-          suffixText: suffix,
-          suffixStyle: TextStyle(
+          isDense:        true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 8.h),
+          suffixText:     suffix,
+          suffixStyle:    TextStyle(
               fontSize: 11.sp, color: ColorsManager.defaultTextSecondary),
-          filled: true,
+          filled:    true,
           fillColor: theme.cardColor,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6.r),
-              borderSide: BorderSide(color: theme.dividerColor)),
+              borderSide:   BorderSide(color: theme.dividerColor)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6.r),
-              borderSide: BorderSide(color: theme.dividerColor)),
+              borderSide:   BorderSide(color: theme.dividerColor)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6.r),
-              borderSide: BorderSide(color: ColorsManager.primaryColor)),
+              borderSide:   BorderSide(color: ColorsManager.primaryColor)),
           errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6.r),
-              borderSide: BorderSide(color: ColorsManager.errorFill)),
+              borderSide:   BorderSide(color: ColorsManager.errorFill)),
           errorStyle: TextStyle(fontSize: 9.sp, height: 0.8),
         ),
       ),
@@ -732,36 +1036,38 @@ class _NumCell extends StatelessWidget {
 class _Footer extends StatelessWidget {
   final double subtotal, invDiscPct, invDiscFlat, netTotal, amtPaid, remaining;
   final TextEditingController invDiscCtrl, amtPaidCtrl;
-  final String payMethod;
-  final bool submitting;
-  final double hPad;
+  final String   payMethod;
+  final bool     submitting;
+  final double   hPad;
   final void Function(String) onMethodChanged;
-  final VoidCallback onChanged, onSubmit;
+  final VoidCallback onChanged;
+  final void Function(bool) onSubmit; // 🚨 تستقبل boolean عشان تحدد مسودة ولا تأكيد
 
-  const _Footer(
-      {required this.subtotal,
-        required this.invDiscPct,
-        required this.invDiscFlat,
-        required this.netTotal,
-        required this.amtPaid,
-        required this.remaining,
-        required this.invDiscCtrl,
-        required this.amtPaidCtrl,
-        required this.payMethod,
-        required this.submitting,
-        required this.hPad,
-        required this.onMethodChanged,
-        required this.onChanged,
-        required this.onSubmit});
+  const _Footer({
+    required this.subtotal,
+    required this.invDiscPct,
+    required this.invDiscFlat,
+    required this.netTotal,
+    required this.amtPaid,
+    required this.remaining,
+    required this.invDiscCtrl,
+    required this.amtPaidCtrl,
+    required this.payMethod,
+    required this.submitting,
+    required this.hPad,
+    required this.onMethodChanged,
+    required this.onChanged,
+    required this.onSubmit,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cur = 'dashboard.currency'.tr();
+    final cur   = 'dashboard.currency'.tr();
 
     return Container(
       decoration: BoxDecoration(
-          color: theme.cardColor,
+          color:  theme.cardColor,
           border: Border(top: BorderSide(color: theme.dividerColor))),
       padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 16.h),
       child: SafeArea(
@@ -774,10 +1080,10 @@ class _Footer extends StatelessWidget {
                 _FooterField(
                     label: 'invoices.invoice_disc_pct'.tr(),
                     child: _NumCell(
-                        ctrl: invDiscCtrl,
+                        ctrl:         invDiscCtrl,
                         allowDecimal: true,
-                        suffix: '%',
-                        onChanged: onChanged,
+                        suffix:       '%',
+                        onChanged:    onChanged,
                         validator: (v) {
                           final n = double.tryParse(v ?? '');
                           if (n == null || n < 0 || n > 100) return '0–100';
@@ -787,9 +1093,9 @@ class _Footer extends StatelessWidget {
                 _FooterField(
                     label: 'invoices.amount_paid'.tr(),
                     child: _NumCell(
-                        ctrl: amtPaidCtrl,
+                        ctrl:         amtPaidCtrl,
                         allowDecimal: true,
-                        onChanged: onChanged)),
+                        onChanged:    onChanged)),
                 SizedBox(width: 12.w),
                 SizedBox(
                   width: 130.w,
@@ -798,13 +1104,13 @@ class _Footer extends StatelessWidget {
                     children: [
                       Text('invoices.method'.tr(),
                           style: TextStyle(
-                              fontSize: 11.sp,
+                              fontSize:   11.sp,
                               fontWeight: FontWeight.w500,
-                              color: ColorsManager.defaultTextSecondary)),
+                              color:      ColorsManager.defaultTextSecondary)),
                       SizedBox(height: 4.h),
                       AppDropdown<String>(
-                        title: '',
-                        value: payMethod,
+                        title:     '',
+                        value:     payMethod,
                         onChanged: (v) => onMethodChanged(v!),
                         items: [
                           DropdownMenuItem(
@@ -832,8 +1138,8 @@ class _Footer extends StatelessWidget {
                       ),
                     Container(
                         height: 1,
-                        width: 260.w,
-                        color: theme.dividerColor,
+                        width:  260.w,
+                        color:  theme.dividerColor,
                         margin: EdgeInsets.symmetric(vertical: 4.h)),
                     _TLine('invoices.net_total'.tr(),
                         '$cur ${netTotal.toStringAsFixed(0)}',
@@ -846,7 +1152,7 @@ class _Footer extends StatelessWidget {
                         'invoices.remaining_debt'.tr(),
                         '$cur ${remaining.toStringAsFixed(0)}',
                         bold: true,
-                        col: remaining > 0
+                        col:  remaining > 0
                             ? ColorsManager.errorText
                             : ColorsManager.successText,
                       ),
@@ -856,10 +1162,30 @@ class _Footer extends StatelessWidget {
               ],
             ),
             SizedBox(height: 14.h),
-            _SubmitBtn(
-              label: 'invoices.confirm_invoice'.tr(),
-              loading: submitting,
-              onTap: onSubmit,
+
+            // 🚨 إضافة زر المسودة بجانب زر التأكيد 🚨
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: _SubmitBtn(
+                    label:   'حفظ كمسودة',
+                    loading: submitting,
+                    isOutlined: true,
+                    onTap:   () => onSubmit(true),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  flex: 2,
+                  child: _SubmitBtn(
+                    label:   'invoices.confirm_invoice'.tr(),
+                    loading: submitting,
+                    isOutlined: false,
+                    onTap:   () => onSubmit(false),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -881,9 +1207,9 @@ class _FooterField extends StatelessWidget {
       children: [
         Text(label,
             style: TextStyle(
-                fontSize: 11.sp,
+                fontSize:   11.sp,
                 fontWeight: FontWeight.w500,
-                color: ColorsManager.defaultTextSecondary)),
+                color:      ColorsManager.defaultTextSecondary)),
         SizedBox(height: 4.h),
         child,
       ],
@@ -893,7 +1219,7 @@ class _FooterField extends StatelessWidget {
 
 class _TLine extends StatelessWidget {
   final String label, value;
-  final bool bold;
+  final bool   bold;
   final Color? col;
   const _TLine(this.label, this.value, {this.bold = false, this.col});
 
@@ -907,27 +1233,34 @@ class _TLine extends StatelessWidget {
         children: [
           Text(label,
               style: TextStyle(
-                  fontSize: bold ? 13.sp : 12.sp,
+                  fontSize:   bold ? 13.sp : 12.sp,
                   fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-                  color: theme.textTheme.bodyMedium?.color)),
+                  color:      theme.textTheme.bodyMedium?.color)),
           SizedBox(width: 20.w),
           Text(value,
               style: TextStyle(
-                  fontSize: bold ? 15.sp : 13.sp,
+                  fontSize:   bold ? 15.sp : 13.sp,
                   fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                  color: col ?? theme.textTheme.bodyMedium?.color)),
+                  color:      col ?? theme.textTheme.bodyMedium?.color)),
         ],
       ),
     );
   }
 }
 
+// 🚨 تحديث زرار الـ Submit عشان يدعم ستايل الـ Outlined للمسودة 🚨
 class _SubmitBtn extends StatelessWidget {
-  final String label;
-  final bool loading;
+  final String   label;
+  final bool     loading;
+  final bool     isOutlined;
   final VoidCallback onTap;
-  const _SubmitBtn(
-      {required this.label, required this.loading, required this.onTap});
+
+  const _SubmitBtn({
+    required this.label,
+    required this.loading,
+    required this.onTap,
+    this.isOutlined = false,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -935,36 +1268,38 @@ class _SubmitBtn extends StatelessWidget {
     child: Container(
       height: 44.h,
       decoration: BoxDecoration(
-          color: loading
-              ? ColorsManager.primaryColor.withOpacity(0.6)
-              : ColorsManager.primaryColor,
+          color: isOutlined
+              ? Colors.transparent
+              : (loading ? ColorsManager.primaryColor.withOpacity(0.6) : ColorsManager.primaryColor),
+          border: isOutlined ? Border.all(color: ColorsManager.primaryColor, width: 1.5) : null,
           borderRadius: BorderRadius.circular(8.r)),
       child: Center(
-          child: loading
+          child: loading && !isOutlined
               ? SizedBox(
-              width: 20.r,
+              width:  20.r,
               height: 20.r,
               child: const CircularProgressIndicator(
                   strokeWidth: 2, color: Colors.white))
               : Text(label,
               style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14.sp,
+                  color:      isOutlined ? ColorsManager.primaryColor : Colors.white,
+                  fontSize:   14.sp,
                   fontWeight: FontWeight.w600))),
     ),
   );
 }
 
 class _FlatBtn extends StatelessWidget {
-  final String label;
+  final String   label;
   final IconData icon;
-  final bool enabled;
+  final bool     enabled;
   final VoidCallback onTap;
-  const _FlatBtn(
-      {required this.label,
-        required this.icon,
-        required this.enabled,
-        required this.onTap});
+  const _FlatBtn({
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -972,7 +1307,7 @@ class _FlatBtn extends StatelessWidget {
     child: Container(
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
       decoration: BoxDecoration(
-          color: enabled
+          color:        enabled
               ? ColorsManager.primaryColor
               : ColorsManager.backgroundSurface,
           borderRadius: BorderRadius.circular(6.r)),
@@ -980,16 +1315,14 @@ class _FlatBtn extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon,
-              size: 14.r,
-              color: enabled
-                  ? Colors.white
-                  : ColorsManager.defaultTextSecondary),
+              size:  14.r,
+              color: enabled ? Colors.white : ColorsManager.defaultTextSecondary),
           SizedBox(width: 4.w),
           Text(label,
               style: TextStyle(
-                  fontSize: 12.sp,
+                  fontSize:   12.sp,
                   fontWeight: FontWeight.w600,
-                  color: enabled
+                  color:      enabled
                       ? Colors.white
                       : ColorsManager.defaultTextSecondary)),
         ],
@@ -1006,8 +1339,8 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Text(label,
       style: TextStyle(
           fontWeight: FontWeight.w600,
-          fontSize: 14.sp,
-          color: Theme.of(context).textTheme.titleSmall?.color));
+          fontSize:   14.sp,
+          color:      Theme.of(context).textTheme.titleSmall?.color));
 }
 
 // ─── Line state ───────────────────────────────────────────────────────────────
@@ -1018,22 +1351,22 @@ class _LineState {
   final TextEditingController daysCtrl;
   final TextEditingController priceCtrl;
   final TextEditingController discCtrl;
+  bool isSubRented = false;
 
   _LineState({this.item})
-      : qtyCtrl = TextEditingController(text: '1'),
-        daysCtrl = TextEditingController(text: '1'),
-        priceCtrl = TextEditingController(
+      : qtyCtrl   = TextEditingController(text: '1'),
+        daysCtrl   = TextEditingController(text: '1'),
+        priceCtrl  = TextEditingController(
             text: item != null ? item.defaultPrice.toStringAsFixed(0) : '0'),
-        discCtrl = TextEditingController(text: '0');
+        discCtrl   = TextEditingController(text: '0');
 
-  int get qty => int.tryParse(qtyCtrl.text) ?? 1;
-  int get days => int.tryParse(daysCtrl.text) ?? 1;
+  int    get qty        => int.tryParse(qtyCtrl.text)    ?? 1;
+  int    get days       => int.tryParse(daysCtrl.text)   ?? 1;
   double get pricePerDay => double.tryParse(priceCtrl.text) ?? 0;
-  double get discPct =>
-      (double.tryParse(discCtrl.text) ?? 0).clamp(0, 100);
-  double get gross => qty * days * pricePerDay;
+  double get discPct    => (double.tryParse(discCtrl.text) ?? 0).clamp(0, 100);
+  double get gross      => qty * days * pricePerDay;
   double get flatDiscount => gross * (discPct / 100);
-  double get lineNet => (gross - flatDiscount).clamp(0, double.infinity);
+  double get lineNet    => (gross - flatDiscount).clamp(0, double.infinity);
 
   void dispose() {
     qtyCtrl.dispose();

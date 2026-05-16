@@ -39,7 +39,7 @@ class EditInvoiceUseCase implements UseCase<void, EditInvoiceParams> {
     final additionalDebt = _calculateAdditionalDebt(params);
 
     if (additionalDebt < 0) {
-      return Left(ValidationFailure(
+      return const Left(ValidationFailure(
         'Additional debt cannot be negative.',
       ));
     }
@@ -48,9 +48,11 @@ class EditInvoiceUseCase implements UseCase<void, EditInvoiceParams> {
       invoiceId:       params.invoiceId,
       newItems:        params.newItems,
       existingUpdates: params.modifiedItems,
-      additionalDebt:  additionalDebt,
+     // additionalDebt:  additionalDebt,
       newDiscount:     params.newDiscount,
       currentItems:    params.originalInvoice.items,
+      jobName:         params.jobName,
+      production:      params.production,
     );
   }
 
@@ -87,8 +89,10 @@ class EditInvoiceParams extends Equatable {
   final String invoiceId;
   final InvoiceEntity originalInvoice;
   final List<InvoiceItemEntity> newItems;
-  final Map<String, Map<String, dynamic>> modifiedItems; // 👈
+  final Map<String, Map<String, dynamic>> modifiedItems;
   final double? newDiscount;
+  final String? jobName;
+  final String? production;
 
   const EditInvoiceParams({
     required this.invoiceId,
@@ -96,9 +100,11 @@ class EditInvoiceParams extends Equatable {
     required this.newItems,
     required this.modifiedItems,
     this.newDiscount,
+    this.jobName,
+    this.production,
   });
 
   @override
   List<Object?> get props =>
-      [invoiceId, originalInvoice, newItems, modifiedItems, newDiscount];
+      [invoiceId, originalInvoice, newItems, modifiedItems, newDiscount, jobName, production];
 }

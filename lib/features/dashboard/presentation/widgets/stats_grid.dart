@@ -43,13 +43,13 @@ class StatsGrid extends StatelessWidget {
         mainValue: data.activeRentals.toString(),
         subtitle: '',
       ),
+      // 🆕 استبدال كارت المدفوعات المعلقة بكارت ديون الموردين
       StatsCard(
-        icon: Icons.access_time_outlined,
-        iconColor: ColorsManager.warningFill,
-        title: 'dashboard.pendingPayments'.tr(),
-        mainValue: data.pendingPayments.toPrefixMoney(currency),
-        subtitle: 'dashboard.pendingInvoices'
-            .tr(namedArgs: {'count': '${data.pendingInvoicesCount}'}),
+        icon: Icons.business_outlined,
+        iconColor: ColorsManager.errorFill,
+        title: 'dashboard.supplierDebts'.tr(),
+        mainValue: data.supplierDebts.toPrefixMoney(currency),
+        subtitle: 'dashboard.whatWeOwe'.tr(),
       ),
       StatsCard(
         icon: Icons.people_outline,

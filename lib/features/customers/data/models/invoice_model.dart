@@ -15,6 +15,8 @@ class InvoiceModel extends InvoiceEntity {
     required super.createdAt,
     required super.invoiceNumber,
     super.items = const [],
+    super.jobName,
+    super.production,
   });
 
   factory InvoiceModel.fromJson(Map<String, dynamic> json) {
@@ -34,39 +36,46 @@ class InvoiceModel extends InvoiceEntity {
       items: rawItems
           .map((i) => InvoiceItemModel.fromJson(i as Map<String, dynamic>))
           .toList(),
+      jobName: json['job_name']?.toString(),
+      production: json['production']?.toString(),
     );
   }
   factory InvoiceModel.fromEntity(InvoiceEntity entity) => InvoiceModel(
-        id: entity.id,
-        customerId: entity.customerId,
-        createdBy: entity.createdBy,
-        totalAmount: entity.totalAmount,
-        discount: entity.discount,
-        status: entity.status,
-        invoiceNumber: entity.invoiceNumber,
-        createdAt: entity.createdAt,
-        items: entity.items,
-      );
+    id: entity.id,
+    customerId: entity.customerId,
+    createdBy: entity.createdBy,
+    totalAmount: entity.totalAmount,
+    discount: entity.discount,
+    status: entity.status,
+    invoiceNumber: entity.invoiceNumber,
+    createdAt: entity.createdAt,
+    items: entity.items,
+    jobName: entity.jobName,
+    production: entity.production,
+  );
 
   Map<String, dynamic> toJson() => {
-        'customer_id': customerId,
-        'created_by': createdBy,
-        'total_amount': totalAmount,
-        'discount': discount,
-        'status': _statusToString(status),
-      };
+    'customer_id': customerId,
+    'created_by': createdBy,
+    'total_amount': totalAmount,
+    'discount': discount,
+    'status': _statusToString(status),
+    'created_at': createdAt.toIso8601String(),
+    if (jobName != null) 'job_name': jobName,
+    if (production != null) 'production': production,
+  };
 
   static InvoiceStatus _mapStatus(String s) => switch (s) {
-        'active' => InvoiceStatus.active,
-        'completed' => InvoiceStatus.completed,
-        'canceled' => InvoiceStatus.canceled,
-        _ => InvoiceStatus.draft,
-      };
+    'active' => InvoiceStatus.active,
+    'completed' => InvoiceStatus.completed,
+    'canceled' => InvoiceStatus.canceled,
+    _ => InvoiceStatus.draft,
+  };
 
   static String _statusToString(InvoiceStatus s) => switch (s) {
-        InvoiceStatus.active => 'active',
-        InvoiceStatus.completed => 'completed',
-        InvoiceStatus.canceled => 'canceled',
-        InvoiceStatus.draft => 'draft',
-      };
+    InvoiceStatus.active => 'active',
+    InvoiceStatus.completed => 'completed',
+    InvoiceStatus.canceled => 'canceled',
+    InvoiceStatus.draft => 'draft',
+  };
 }
