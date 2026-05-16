@@ -385,36 +385,47 @@ class InvoicePdfGenerator {
       pw.TextStyle sSm,
       String cur,
       ) {
+    // Subtotal should be the gross total (before ANY discounts)
+    final subtotal = invoice.grossTotal;
+
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: _kGrey200, width: 0.6),
         borderRadius: pw.BorderRadius.circular(6),
-        color: summary.isFullyPaid ? _kSuccessBg : _kWarningBg,
+        // اللون أخضر لو مدفوعة، رمادي لو عليها فلوس (عشان نشيل الألوان التحذيرية المزعجة)
+        color: summary.isFullyPaid ? _kSuccessBg : _kGrey100,
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          // Status badge
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: pw.BoxDecoration(
-              color: summary.isFullyPaid ? _kSuccess : _kWarning,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Text(
-              summary.isFullyPaid ? '✓ PAID' : 'PENDING',
-              style: sBold.copyWith(color: PdfColors.white, fontSize: 7.5),
-            ),
-          ),
+          // Status badge - Show ONLY if paid. Hide if unpaid to remove "PENDING"
+          if (summary.isFullyPaid)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: pw.BoxDecoration(
+                color: _kSuccess,
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                '✓ PAID',
+                style: sBold.copyWith(color: PdfColors.white, fontSize: 7.5),
+              ),
+            )
+          else
+          // Spacer if no badge
+            pw.SizedBox(width: 40),
 
-          _compactStat('Subtotal', '${_f(invoice.totalAmount)} $cur', sBase, sSm),
+          // Subtotal (Gross before item and invoice discounts)
+          _compactStat('Subtotal', '${_f(subtotal)} $cur', sBase, sSm),
 
+          // Show Item Discounts if exist
           if (invoice.totalItemDiscounts > 0)
             _compactStat('Item Disc.', '− ${_f(invoice.totalItemDiscounts)} $cur',
                 sBase.copyWith(color: _kDanger), sSm),
 
+          // Show Invoice Discount if exist
           if (invoice.discount > 0)
             _compactStat(
               'Inv. Disc. (${invoice.discountPercent.toStringAsFixed(1)}%)',
@@ -425,14 +436,17 @@ class InvoicePdfGenerator {
           // Divider
           pw.Container(width: 0.6, height: 28, color: _kGrey200),
 
+          // Net Total (Gross - Item Disc - Inv Disc)
           _compactStat('Net Total', '${_f(invoice.netTotal)} $cur', sTotal, sSm),
 
           // Divider
           pw.Container(width: 0.6, height: 28, color: _kGrey200),
 
+          // Paid
           _compactStat('Amount Paid', '${_f(summary.totalPaid)} $cur',
               sBase.copyWith(color: _kSuccess), sSm),
 
+          // Remaining
           if (summary.remaining > 0)
             _compactStat('Balance Due', '${_f(summary.remaining)} $cur',
                 sBold.copyWith(color: _kDanger), sSm),
