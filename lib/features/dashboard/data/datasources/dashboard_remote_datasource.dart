@@ -1,3 +1,5 @@
+// lib/features/dashboard/data/datasources/dashboard_remote_datasource.dart
+
 import 'package:bungee_manage_sys/core/errors/error_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -23,50 +25,51 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
       final prevMonthStart = firstDayOfPreviousMonth.toIso8601String();
       final prevMonthEnd = lastDayOfPreviousMonth.add(const Duration(days: 1)).toIso8601String();
 
-      // ── 1. إجمالي الإيرادات (كل المدفوعات الواردة) ───────────
+      // ── 1. 🚨 التعديل: إجمالي الإيرادات المعتمدة فقط (معزول عن دفعات الـ Drafts الوهمية) 🚨
       final transactionsRes = await _supabase
-          .from('financial_transactions')
+          .from('valid_financial_transactions') // 👈 قراءة من الـ View المعزول ماليًا
           .select('amount')
           .eq('type', 'in');
 
-      // ── 2. الفواتير النشطة (تأجيرات نشطة + مبالغ معلقة) ──────
+      // ── 2. حساب الفواتير المعتمدة ماليًا (نشطة + مكتملة) وعزل المسودات
       final activeInvoicesRes = await _supabase
           .from('invoices')
-          .select('id, total_amount, discount')
-          .eq('status', 'active');
+          .select('id, total_amount, discount, status')
+          .inFilter('status', ['active', 'completed']);
 
-      // ── 3. ديون وأرصدة العملاء ───────────────────────────────
+      // ── 3. ديون وأرصدة العملاء الحقيقية المزامنة مع المحرك المالي
       final customersRes = await _supabase
           .from('customers')
           .select('total_paid, total_debt');
 
-      // ── 4. أحدث 5 فواتير (البديل للكاميرات) 🚨 ────────────────
+      // ── 4. أحدث 5 فواتير معتمدة ونشطة (عزل المسودات)
       final recentInvoicesRes = await _supabase
           .from('invoices')
           .select('id, invoice_number, total_amount, discount, status, created_at, customers(name)')
-          .order('created_at', ascending: false) // الترتيب من الأحدث للأقدم
+          .neq('status', 'draft')
+          .order('created_at', ascending: false)
           .limit(5);
 
-      // ── 5. الإيرادات الشهرية (السنة الحالية) ─────────────────
+      // ── 5. 🚨 التعديل: الإيرادات الشهرية الحقيقية (السنة الحالية) من الـ View 🚨
       final monthlyRes = await _supabase
-          .from('financial_transactions')
+          .from('valid_financial_transactions') // 👈 قراءة من الـ View المعزول ماليًا
           .select('amount, created_at')
           .eq('type', 'in')
           .gte('created_at', yearStart);
 
-      // ── 6. إيرادات الشهر الماضي (لحساب نسبة النمو) ────────────
+      // ── 6. 🚨 التعديل: إيرادات الشهر الماضي الحقيقية من الـ View 🚨
       final previousMonthRes = await _supabase
-          .from('financial_transactions')
+          .from('valid_financial_transactions') // 👈 قراءة من الـ View المعزول ماليًا
           .select('amount')
           .eq('type', 'in')
           .gte('created_at', prevMonthStart)
           .lt('created_at', prevMonthEnd);
 
-      // ── 7. ديون الموردين (الفواتير غير المدفوعة بالكامل) ────
+      // ── 7. ديون الموردين (الفواتير غير المدفوعة بالكامل)
       final supplierDebtsRes = await _supabase
           .from('supplier_invoices')
-          .select('total_amount, paid_amount')
-          .neq('status', 'paid'); // كل الفواتير اللي مش مدفوعة بالكامل
+          .select('total_amount, discount, paid_amount')
+          .neq('status', 'paid');
 
       // ── تجميع الإيرادات الشهرية يدوياً ───────────────────────
       final monthlyRevenues = _aggregateMonthly(

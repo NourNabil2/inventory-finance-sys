@@ -20,12 +20,14 @@ ChipStatus _chipStatus(SupplierInvoiceStatus s) => switch (s) {
   SupplierInvoiceStatus.paid    => ChipStatus.completed,
   SupplierInvoiceStatus.partial => ChipStatus.pending,
   SupplierInvoiceStatus.unpaid  => ChipStatus.reserved,
+  SupplierInvoiceStatus.cancelled => ChipStatus.canceled,
 };
 
 String _statusLabel(SupplierInvoiceStatus s) => switch (s) {
   SupplierInvoiceStatus.paid    => 'مدفوعة',
   SupplierInvoiceStatus.partial => 'مدفوعة جزئياً',
   SupplierInvoiceStatus.unpaid  => 'غير مدفوعة',
+  SupplierInvoiceStatus.cancelled => 'ملغي',
 };
 
 // ── Invoice card (used in the invoices list) ─────────────────────────────────
@@ -112,6 +114,8 @@ class SupplierInvoiceTile extends StatelessWidget {
     );
   }
 }
+
+// ── Invoice detail card ───────────────────────────────────────────────────────
 
 // ── Invoice detail card ───────────────────────────────────────────────────────
 
@@ -235,12 +239,22 @@ class SupplierInvoiceDetailCard extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(height: 10.h),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              SizedBox(height: 16.h),
+              // 🚨 التعديل الأول: تفصيل المبالغ (إجمالي، خصم، صافي، مدفوع، متبقي) 🚨
+              Wrap(
+                spacing: 8.w,
+                runSpacing: 12.h,
+                alignment: WrapAlignment.spaceBetween,
                 children: [
-                  AppInfoRow.stacked('الإجمالي',
+                  AppInfoRow.stacked('الإجمالي (قبل)',
                       '$cur ${invoice.totalAmount.toStringAsFixed(0)}'),
+                  if (invoice.discount > 0)
+                    AppInfoRow.stacked('الخصم',
+                        '-$cur ${invoice.discount.toStringAsFixed(0)}',
+                        valueColor: ColorsManager.warningText),
+                  AppInfoRow.stacked('الصافي النهائي',
+                      '$cur ${invoice.netAmount.toStringAsFixed(0)}',
+                      valueColor: ColorsManager.primaryColor),
                   AppInfoRow.stacked('المدفوع',
                       '$cur ${invoice.paidAmount.toStringAsFixed(0)}',
                       valueColor: ColorsManager.successText),
@@ -321,26 +335,51 @@ class SupplierInvoiceDetailCard extends StatelessWidget {
                     ],
                   );
                 }),
-                // Total row
+
+                // 🚨 التعديل التاني: صفوف الإجمالي والخصم والصافي في آخر الجدول 🚨
                 Divider(height: 1, color: theme.dividerColor),
                 Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: 14.w, vertical: 10.h),
+                  padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
                   child: Row(
                     children: [
                       Expanded(
                         flex: 4,
                         child: Text('الإجمالي',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize:   13.sp,
-                                color: theme.textTheme.bodyMedium?.color)),
+                            style: TextStyle(fontSize: 12.sp, color: theme.textTheme.bodyMedium?.color)),
                       ),
-                      const _Cell(''),
-                      const _Cell(''),
-                      const _Cell(''),
+                      const _Cell(''), const _Cell(''), const _Cell(''),
+                      _Cell('$cur ${invoice.totalAmount.toStringAsFixed(0)}', end: true),
+                    ],
+                  ),
+                ),
+                if (invoice.discount > 0)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 4,
+                          child: Text('الخصم',
+                              style: TextStyle(fontSize: 12.sp, color: ColorsManager.warningText)),
+                        ),
+                        const _Cell(''), const _Cell(''), const _Cell(''),
+                        _Cell('-$cur ${invoice.discount.toStringAsFixed(0)}', end: true, color: ColorsManager.warningText),
+                      ],
+                    ),
+                  ),
+                Divider(height: 1, color: theme.dividerColor),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: Text('الصافي النهائي',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.sp, color: theme.textTheme.bodyMedium?.color)),
+                      ),
+                      const _Cell(''), const _Cell(''), const _Cell(''),
                       _Cell(
-                        '$cur ${invoice.totalAmount.toStringAsFixed(0)}',
+                        '$cur ${invoice.netAmount.toStringAsFixed(0)}', // 👈 استخدمنا netAmount
                         end: true,
                         bold: true,
                         color: ColorsManager.primaryColor,

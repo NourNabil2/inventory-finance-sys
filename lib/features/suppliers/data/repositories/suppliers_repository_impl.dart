@@ -20,16 +20,11 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
   final SuppliersRemoteDataSource _ds;
   SuppliersRepositoryImpl(this._ds);
 
-  // ── Supplier CRUD ─────────────────────────────────────────
-
   @override
   Future<Either<Failure, List<SupplierEntity>>> getSuppliers() async {
     try {
-      final raw = await _ds.getSuppliers();
-      return Right(raw.map(SupplierModel.fromJson).toList());
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right((await _ds.getSuppliers()).map(SupplierModel.fromJson).toList());
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -37,62 +32,46 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     try {
       await _ds.saveSupplier(SupplierModel.fromEntity(supplier).toJson());
       return const Right(null);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
-  }
-
-  // ── Purchase invoices ─────────────────────────────────────
-
-  @override
-  Future<Either<Failure, List<SupplierInvoiceEntity>>> getSupplierInvoices(
-      String supplierId) async {
-    try {
-      final raw = await _ds.getSupplierInvoices(supplierId);
-      return Right(raw.map(SupplierInvoiceModel.fromJson).toList());
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
-  Future<Either<Failure, SupplierInvoiceEntity>> getInvoiceDetails(
-      String invoiceId) async {
+  Future<Either<Failure, List<SupplierInvoiceEntity>>> getSupplierInvoices(String supplierId) async {
     try {
-      final raw = await _ds.getInvoiceDetails(invoiceId);
-      return Right(SupplierInvoiceModel.fromJson(raw));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right((await _ds.getSupplierInvoices(supplierId)).map(SupplierInvoiceModel.fromJson).toList());
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
+  }
+
+  @override
+  Future<Either<Failure, SupplierInvoiceEntity>> getInvoiceDetails(String invoiceId) async {
+    try {
+      return Right(SupplierInvoiceModel.fromJson(await _ds.getInvoiceDetails(invoiceId)));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
   Future<Either<Failure, String>> createSupplierInvoice({
     required String supplierId,
     required List<SupplierInvoiceItemEntity> items,
+    double discount = 0,    // 🆕
     String? notes,
   }) async {
     try {
       final invoiceData = {
         'supplier_id': supplierId,
+        'discount':    discount,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       };
+      // 🚨 FIX #1: تمرير itemDiscount من Entity إلى Model
       final itemsData = items
           .map((i) => SupplierInvoiceItemModel(
-        id: '',
-        invoiceId: '',
-        itemName: i.itemName,
-        qty: i.qty,
-        days: i.days,
-        pricePerDay: i.pricePerDay,
+        id: '', invoiceId: '', itemName: i.itemName,
+        qty: i.qty, days: i.days, pricePerDay: i.pricePerDay,
+        itemDiscount: i.itemDiscount,
       ).toJson())
           .toList();
-      final id = await _ds.createSupplierInvoice(
-          invoiceData: invoiceData, itemsData: itemsData);
-      return Right(id);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(await _ds.createSupplierInvoice(invoiceData: invoiceData, itemsData: itemsData));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -102,25 +81,59 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     required String method,
   }) async {
     try {
-      final raw = await _ds.recordPayment(
-          invoiceId: invoiceId, amount: amount, method: method);
-      return Right(SupplierPaymentSummary.fromJson(raw));
+      return Right(SupplierPaymentSummary.fromJson(
+          await _ds.recordPayment(invoiceId: invoiceId, amount: amount, method: method)));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
+  }
+
+  // ── 🆕 إلغاء فاتورة ────────────────────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, void>> cancelSupplierInvoice({
+    required String invoiceId,
+    String? reason,
+  }) async {
+    try {
+      await _ds.cancelSupplierInvoice(invoiceId: invoiceId, reason: reason);
+      return const Right(null);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }
   }
 
-  // ── Service invoices ──────────────────────────────────────
+  // ── 🆕 تعديل فاتورة ────────────────────────────────────────────────────────────
 
   @override
-  Future<Either<Failure, List<ServiceInvoiceEntity>>> getSupplierServiceInvoices(
-      String supplierId) async {
+  Future<Either<Failure, void>> editSupplierInvoice({
+    required String invoiceId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  }) async {
     try {
-      final raw = await _ds.getSupplierServiceInvoices(supplierId);
-      return Right(raw.map(ServiceInvoiceModel.fromJson).toList());
+      await _ds.editSupplierInvoice(
+        invoiceId: invoiceId,
+        discount: discount,
+        notes: notes,
+        deletedItemIds: deletedItemIds,
+        existingUpdates: existingUpdates,
+        newItems: newItems,
+      );
+      return const Right(null);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }
+  }
+
+  // ── Service invoices ─────────────────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, List<ServiceInvoiceEntity>>> getSupplierServiceInvoices(String supplierId) async {
+    try {
+      return Right((await _ds.getSupplierServiceInvoices(supplierId)).map(ServiceInvoiceModel.fromJson).toList());
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -130,15 +143,9 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     required List<Map<String, dynamic>> itemsData,
   }) async {
     try {
-      final id = await _ds.createFullServiceInvoiceForSupplier(
-        supplierId:  supplierId,
-        invoiceData: invoiceData,
-        itemsData:   itemsData,
-      );
-      return Right(id);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(await _ds.createFullServiceInvoiceForSupplier(
+          supplierId: supplierId, invoiceData: invoiceData, itemsData: itemsData));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -148,12 +155,9 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     String? notes,
   }) async {
     try {
-      final id = await _ds.createServiceInvoiceForSupplier(
-          supplierId: supplierId, totalAmount: totalAmount, notes: notes);
-      return Right(id);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(await _ds.createServiceInvoiceForSupplier(
+          supplierId: supplierId, totalAmount: totalAmount, notes: notes));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -165,18 +169,10 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
   }) async {
     try {
       await _ds.recordServicePayment(
-        invoiceId:  invoiceId,
-        supplierId: supplierId,
-        amount:     amount,
-        method:     method,
-      );
+          invoiceId: invoiceId, supplierId: supplierId, amount: amount, method: method);
       return const Right(null);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
-
-  // ── Unified supplier clearing ─────────────────────────────
 
   @override
   Future<Either<Failure, ClearingResult>> executeSupplierClearing({
@@ -186,18 +182,10 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     String? createdBy,
   }) async {
     try {
-      final raw = await _ds.executeSupplierClearing(
-          supplierId: supplierId,
-          amount:     amount,
-          notes:      notes,
-          createdBy:  createdBy);
-      return Right(ClearingResult.fromJson(raw));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(ClearingResult.fromJson(await _ds.executeSupplierClearing(
+          supplierId: supplierId, amount: amount, notes: notes, createdBy: createdBy)));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
-
-  // ── Legacy cross-customer clearing ────────────────────────
 
   @override
   Future<Either<Failure, void>> updateLinkedCustomer({
@@ -205,12 +193,9 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     required String? customerId,
   }) async {
     try {
-      await _ds.updateLinkedCustomer(
-          supplierId: supplierId, customerId: customerId);
+      await _ds.updateLinkedCustomer(supplierId: supplierId, customerId: customerId);
       return const Right(null);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -222,16 +207,10 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     String? createdBy,
   }) async {
     try {
-      final raw = await _ds.executeClearing(
-          supplierId: supplierId,
-          customerId: customerId,
-          amount:     amount,
-          notes:      notes,
-          createdBy:  createdBy);
-      return Right(ClearingResult.fromJson(raw));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(ClearingResult.fromJson(await _ds.executeClearing(
+          supplierId: supplierId, customerId: customerId,
+          amount: amount, notes: notes, createdBy: createdBy)));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
   @override
@@ -245,18 +224,11 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     String? createdBy,
   }) async {
     try {
-      final raw = await _ds.executeFlexibleClearing(
-        supplierId:   supplierId,
-        clearingType: clearingType,
-        offsetAmount: offsetAmount,
-        cashAmount:   cashAmount,
-        cashMethod:   cashMethod,
-        notes:        notes,
-        createdBy:    createdBy,
-      );
-      return Right(ClearingResult.fromJson(raw));
-    } on ServerException catch (e) {
-      return Left(ServerFailure(e.message));
-    }
+      return Right(ClearingResult.fromJson(await _ds.executeFlexibleClearing(
+        supplierId: supplierId, clearingType: clearingType,
+        offsetAmount: offsetAmount, cashAmount: cashAmount,
+        cashMethod: cashMethod, notes: notes, createdBy: createdBy,
+      )));
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 }

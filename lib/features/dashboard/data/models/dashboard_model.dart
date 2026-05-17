@@ -63,8 +63,11 @@ class DashboardModel extends DashboardEntity {
       0,
           (sum, inv) {
         final totalAmount = (inv['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final discount    = (inv['discount'] as num?)?.toDouble() ?? 0.0; // 🚨 سحب الخصم
         final paidAmount  = (inv['paid_amount']  as num?)?.toDouble() ?? 0.0;
-        return sum + (totalAmount - paidAmount); // الرصيد المتبقي
+
+        // 🚨 حساب الصافي الحقيقي
+        return sum + ((totalAmount - discount) - paidAmount);
       },
     );
 

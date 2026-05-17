@@ -10,7 +10,7 @@ abstract class FinanceRemoteDataSource {
   Future<Map<String, dynamic>> getFinancialSummary();
   Future<String> createTransaction({
     required double amount, required String type, required String method, required String category,
-    String? referenceId, String? customerId, String? notes, // 👈 ضفنا customerId هنا
+    String? referenceId, String? customerId, String? notes,
   });
   Future<void> depositToWallet({
     required String customerId, required double amount, required String method, String? notes,
@@ -28,7 +28,8 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
     DateTime? startDate, DateTime? endDate, String? type, String? method, String? category,
   }) async {
     try {
-      var query = _supabase.from('financial_transactions').select('*, customers(name)');
+      // 🚨 التعديل: القراءة من الـ View المعزول ماليًا عن الـ Drafts
+      var query = _supabase.from('valid_financial_transactions').select('*, customers(name)');
       if (startDate != null) query = query.gte('created_at', startDate.toIso8601String());
       if (endDate   != null) query = query.lte('created_at', endDate.toIso8601String());
       if (type      != null) query = query.eq('type', type);
@@ -44,11 +45,10 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
   @override
   Future<Map<String, dynamic>> getFinancialSummary() async {
     try {
+      // 🚨 التعديل: جلب كل الحركات المعتمدة ماليًا بدون الـ Limit الوهمي لحساب الأرصاد بدقة
       final transactions = await _supabase
-          .from('financial_transactions')
-          .select('amount, type, method, created_at')
-          .order('created_at', ascending: false)
-          .limit(1000);
+          .from('valid_financial_transactions')
+          .select('amount, type, method, created_at');
 
       double cashIncome = 0, cashExpense = 0;
       double bankIncome = 0, bankExpense = 0;
@@ -85,9 +85,9 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
         }
       }
 
-      // 🚨 التعديل هنا: جلب اسم العميل مع آخر الحركات 🚨
+      // جلب آخر 20 حركة معتمدة لعرضهم في جدول الـ Recent
       final recent = await _supabase
-          .from('financial_transactions')
+          .from('valid_financial_transactions')
           .select('*, customers(name)')
           .order('created_at', ascending: false)
           .limit(20);
@@ -114,10 +114,16 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
     try {
       final response = await _supabase.from('financial_transactions').insert({
         'amount': amount, 'type': type, 'method': method, 'category': category,
-        'reference_id': referenceId, 'customer_id': customerId, // 👈 إرسال الـ ID للداتابيز
+        'reference_id': referenceId, 'customer_id': customerId,
         'created_by': _supabase.auth.currentUser?.id, 'notes': notes,
         'created_at': DateTime.now().toIso8601String(),
       }).select('id').single();
+
+      // 🚨 بعد أي حركة كاش حرة، بنعمل تحديث مالي فوري لحساب العميل لضمان المزامنة
+      if (customerId != null) {
+        await _supabase.rpc('sync_customer_financials', params: {'p_customer_id': customerId});
+      }
+
       return response['id'] as String;
     } catch (e, st) {
       throw ErrorHandler.handleException(e, st);
@@ -140,18 +146,26 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
   @override
   Future<double> getCashBalance() async {
     try {
-      final income  = await _supabase.from('financial_transactions').select('amount').eq('type', 'in').eq('method', 'safe');
-      final expense = await _supabase.from('financial_transactions').select('amount').eq('type', 'out').eq('method', 'safe');
-      return income.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0)) - expense.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      // 🚨 التعديل: حساب الحساب الإجمالي المعتمد والصافي من الـ View مباشرة لضمان أداء خارق 🚀
+      final incomeRes = await _supabase.from('valid_financial_transactions').select('amount').eq('type', 'in').eq('method', 'safe');
+      final expenseRes = await _supabase.from('valid_financial_transactions').select('amount').eq('type', 'out').eq('method', 'safe');
+
+      final income = incomeRes.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      final expense = expenseRes.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      return income - expense;
     } catch (e, st) { throw ErrorHandler.handleException(e, st); }
   }
 
   @override
   Future<double> getBankBalance() async {
     try {
-      final income  = await _supabase.from('financial_transactions').select('amount').eq('type', 'in').eq('method', 'bank');
-      final expense = await _supabase.from('financial_transactions').select('amount').eq('type', 'out').eq('method', 'bank');
-      return income.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0)) - expense.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      // 🚨 التعديل: حساب الحساب الإجمالي المعتمد والصافي من الـ View مباشرة
+      final incomeRes = await _supabase.from('valid_financial_transactions').select('amount').eq('type', 'in').eq('method', 'bank');
+      final expenseRes = await _supabase.from('valid_financial_transactions').select('amount').eq('type', 'out').eq('method', 'bank');
+
+      final income = incomeRes.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      final expense = expenseRes.fold<double>(0, (s, t) => s + ((t['amount'] as num?)?.toDouble() ?? 0));
+      return income - expense;
     } catch (e, st) { throw ErrorHandler.handleException(e, st); }
   }
 }

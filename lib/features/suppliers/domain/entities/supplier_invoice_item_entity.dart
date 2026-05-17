@@ -1,5 +1,3 @@
-// lib/features/suppliers/domain/entities/supplier_invoice_item_entity.dart
-
 import 'package:equatable/equatable.dart';
 
 class SupplierInvoiceItemEntity extends Equatable {
@@ -9,19 +7,17 @@ class SupplierInvoiceItemEntity extends Equatable {
   final int qty;
   final int days;
   final double pricePerDay;
+  final double itemDiscount; // 🚨 الإضافة هنا
 
   const SupplierInvoiceItemEntity({
-    required this.id,
-    required this.invoiceId,
-    required this.itemName,
-    required this.qty,
-    required this.days,
-    required this.pricePerDay,
+    required this.id, required this.invoiceId, required this.itemName,
+    required this.qty, required this.days, required this.pricePerDay,
+    this.itemDiscount = 0.0, // 🚨 الإضافة هنا
   });
 
-  // حساب إجمالي السطر أوتوماتيكياً
-  double get lineTotal => qty * days * pricePerDay;
+  // حساب الإجمالي ناقص الخصم
+  double get lineTotal => (qty * days * pricePerDay) - itemDiscount;
 
   @override
-  List<Object?> get props => [id, invoiceId, itemName, qty, days, pricePerDay];
+  List<Object?> get props => [id, invoiceId, itemName, qty, days, pricePerDay, itemDiscount];
 }

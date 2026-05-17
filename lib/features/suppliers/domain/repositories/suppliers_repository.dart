@@ -10,18 +10,15 @@ import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_pa
 import 'package:dartz/dartz.dart';
 
 abstract class SuppliersRepository {
-  // ── Supplier CRUD ──────────────────────────────────────────
   Future<Either<Failure, List<SupplierEntity>>> getSuppliers();
   Future<Either<Failure, void>> saveSupplier(SupplierEntity supplier);
 
-  // ── Purchase invoices (we buy FROM supplier) ───────────────
-  Future<Either<Failure, List<SupplierInvoiceEntity>>> getSupplierInvoices(
-      String supplierId);
-  Future<Either<Failure, SupplierInvoiceEntity>> getInvoiceDetails(
-      String invoiceId);
+  Future<Either<Failure, List<SupplierInvoiceEntity>>> getSupplierInvoices(String supplierId);
+  Future<Either<Failure, SupplierInvoiceEntity>> getInvoiceDetails(String invoiceId);
   Future<Either<Failure, String>> createSupplierInvoice({
     required String supplierId,
     required List<SupplierInvoiceItemEntity> items,
+    double discount,      // 🆕
     String? notes,
   });
   Future<Either<Failure, SupplierPaymentSummary>> recordPayment({
@@ -30,43 +27,49 @@ abstract class SuppliersRepository {
     required String method,
   });
 
-  // ── Service invoices (supplier rents FROM us) ──────────────
-  Future<Either<Failure, List<ServiceInvoiceEntity>>> getSupplierServiceInvoices(
-      String supplierId);
+  // 🆕
+  Future<Either<Failure, void>> cancelSupplierInvoice({
+    required String invoiceId,
+    String? reason,
+  });
 
+  // 🆕
+  Future<Either<Failure, void>> editSupplierInvoice({
+    required String invoiceId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  });
+
+  Future<Either<Failure, List<ServiceInvoiceEntity>>> getSupplierServiceInvoices(String supplierId);
   Future<Either<Failure, String>> createFullServiceInvoiceForSupplier({
     required String supplierId,
     required Map<String, dynamic> invoiceData,
     required List<Map<String, dynamic>> itemsData,
   });
-
   Future<Either<Failure, String>> createServiceInvoiceForSupplier({
     required String supplierId,
     required double totalAmount,
     String? notes,
   });
-
   Future<Either<Failure, void>> recordServicePayment({
     required String invoiceId,
     required String supplierId,
     required double amount,
     required String method,
   });
-
-  // ── Unified clearing (self-contained) ──────────────────────
   Future<Either<Failure, ClearingResult>> executeSupplierClearing({
     required String supplierId,
     required double amount,
     String? notes,
     String? createdBy,
   });
-
-  // ── Legacy cross-customer clearing ─────────────────────────
   Future<Either<Failure, void>> updateLinkedCustomer({
     required String supplierId,
     required String? customerId,
   });
-
   Future<Either<Failure, ClearingResult>> executeClearing({
     required String supplierId,
     required String customerId,
@@ -74,7 +77,6 @@ abstract class SuppliersRepository {
     String? notes,
     String? createdBy,
   });
-
   Future<Either<Failure, ClearingResult>> executeFlexibleClearing({
     required String supplierId,
     required String clearingType,

@@ -6,12 +6,13 @@ import 'supplier_invoice_item_entity.dart';
 
 export 'supplier_invoice_item_entity.dart';
 
-enum SupplierInvoiceStatus { unpaid, partial, paid }
+enum SupplierInvoiceStatus { unpaid, partial, paid, cancelled }
 
 class SupplierInvoiceEntity extends Equatable {
   final String id;
   final String supplierId;
   final double totalAmount;
+  final double discount;      // 🆕
   final double paidAmount;
   final SupplierInvoiceStatus status;
   final String? notes;
@@ -22,6 +23,7 @@ class SupplierInvoiceEntity extends Equatable {
     required this.id,
     required this.supplierId,
     required this.totalAmount,
+    this.discount    = 0.0,   // 🆕
     required this.paidAmount,
     required this.status,
     this.notes,
@@ -29,13 +31,14 @@ class SupplierInvoiceEntity extends Equatable {
     required this.createdAt,
   });
 
-  double get remaining =>
-      (totalAmount - paidAmount).clamp(0, double.infinity);
-  bool get isFullyPaid => paidAmount >= totalAmount;
+  double get netAmount  => (totalAmount - discount).clamp(0, double.infinity);
+  double get remaining  => (netAmount - paidAmount).clamp(0, double.infinity);
+  bool   get isFullyPaid    => paidAmount >= netAmount;
+  bool   get isCancelled    => status == SupplierInvoiceStatus.cancelled;
   double get paymentPercent =>
-      totalAmount == 0 ? 0 : (paidAmount / totalAmount * 100).clamp(0, 100);
+      netAmount == 0 ? 0 : (paidAmount / netAmount * 100).clamp(0, 100);
 
   @override
   List<Object?> get props =>
-      [id, supplierId, totalAmount, paidAmount, status, notes, items, createdAt];
+      [id, supplierId, totalAmount, discount, paidAmount, status, notes, items, createdAt];
 }

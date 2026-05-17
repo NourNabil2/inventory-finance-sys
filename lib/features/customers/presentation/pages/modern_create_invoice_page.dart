@@ -160,7 +160,10 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
                     children: [
                       _CustomerBadge(customer: widget.customer),
                       SizedBox(height: 16.h),
-
+                      _InvoiceDateRow(
+                        date: _invoiceDate,
+                        onTap: _pickDate,
+                      ),
                       _JobProductionRow(
                         jobNameCtrl:    _jobNameCtrl,
                         productionCtrl: _productionCtrl,
