@@ -653,17 +653,21 @@ InputDecoration _cellDecoration(BuildContext context, {bool highlight = false}) 
 
 // ─── New items section ────────────────────────────────────────────────────────
 
+// ─── New items section ────────────────────────────────────────────────────────
+
 class _NewItemsSection extends StatefulWidget {
   final List<_NewRow> rows;
   final void Function(ItemEntity) onAdd;
   final void Function(int) onRemove;
   final VoidCallback onChanged;
 
-  const _NewItemsSection(
-      {required this.rows,
-        required this.onAdd,
-        required this.onRemove,
-        required this.onChanged});
+  const _NewItemsSection({
+    super.key,
+    required this.rows,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onChanged,
+  });
 
   @override
   State<_NewItemsSection> createState() => _NewItemsSectionState();
@@ -672,6 +676,15 @@ class _NewItemsSection extends StatefulWidget {
 class _NewItemsSectionState extends State<_NewItemsSection> {
   ItemEntity? _pick;
   String? _selectedCategory;
+  final _searchCtrl = TextEditingController();
+  final _focusNode  = FocusNode();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -683,13 +696,11 @@ class _NewItemsSectionState extends State<_NewItemsSection> {
         SizedBox(height: 10.h),
         BlocBuilder<InventoryCubit, InventoryState>(
           builder: (context, state) {
-            // 1. تجميع كل المنتجات المتاحة والفئات
             List<ItemEntity> allItems = [];
             List<String> categories = [];
 
             if (state is InventoryLoaded) {
-              allItems = state.items.where((i) => i.availableQty > 0).toList();
-
+              allItems = state.filtered.where((i) => i.availableQty > 0).toList();
               categories = allItems
                   .map((i) => i.category?.name ?? 'بدون فئة')
                   .toSet()
@@ -701,11 +712,12 @@ class _NewItemsSectionState extends State<_NewItemsSection> {
                 : allItems.where((i) => (i.category?.name ?? 'بدون فئة') == _selectedCategory).toList();
 
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ─── Dropdown فلتر الفئات ───
                 if (categories.isNotEmpty)
                   Padding(
-                    padding: EdgeInsets.only(bottom: 10.h),
+                    padding: EdgeInsets.only(bottom: 12.h),
                     child: AppDropdown<String?>(
                       title: '',
                       value: _selectedCategory,
@@ -722,41 +734,159 @@ class _NewItemsSectionState extends State<_NewItemsSection> {
                       onChanged: (val) {
                         setState(() {
                           _selectedCategory = val;
-                          _pick = null; // تصفير المنتج لما نغير الفئة عشان ميحصلش ايرور
+                          _pick = null;
+                          _searchCtrl.clear();
+                          _focusNode.unfocus();
                         });
                       },
                     ),
                   ),
 
-                // ─── Dropdown اختيار المنتج ───
+                // ─── حقل البحث وإضافة الصنف ───
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: AppDropdown<ItemEntity?>(
-                        title: '',
-                        value: _pick,
-                        enabled: filteredItems.isNotEmpty,
-                        onChanged: (v) => setState(() => _pick = v),
-                        items: filteredItems
-                            .map((i) => DropdownMenuItem(
-                          value: i,
-                          child: Text('${i.name} (×${i.availableQty})',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13.sp)),
-                        ))
-                            .toList(),
+                      child: RawAutocomplete<ItemEntity>(
+                        key: ValueKey(_selectedCategory),
+                        textEditingController: _searchCtrl,
+                        focusNode: _focusNode,
+                        displayStringForOption: (item) => item.name,
+                        optionsBuilder: (TextEditingValue v) {
+                          final query = v.text.toLowerCase().trim();
+                          if (query.isEmpty) return filteredItems;
+                          return filteredItems.where((i) =>
+                          i.name.toLowerCase().contains(query) ||
+                              (i.model?.toLowerCase().contains(query) ?? false));
+                        },
+                        onSelected: (selection) {
+                          setState(() => _pick = selection);
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            onTap: () {
+                              controller.notifyListeners();
+                            },
+                            style: TextStyle(fontSize: 13.sp),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: 'ابحث عن صنف لاختياره...',
+                              hintStyle: TextStyle(
+                                  fontSize: 12.sp,
+                                  color: ColorsManager.defaultTextSecondary),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12.w, vertical: 10.h),
+                              filled: true,
+                              fillColor: theme.cardColor,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: theme.dividerColor)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: theme.dividerColor)),
+                              focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6.r),
+                                  borderSide: BorderSide(color: ColorsManager.primaryColor)),
+                              prefixIcon: Icon(Icons.search,
+                                  size: 18.r, color: ColorsManager.defaultTextSecondary),
+                              suffixIcon: (_pick != null || controller.text.isNotEmpty)
+                                  ? IconButton(
+                                icon: Icon(Icons.close, size: 18.r, color: ColorsManager.errorText),
+                                onPressed: () {
+                                  setState(() {
+                                    _pick = null;
+                                    _searchCtrl.clear();
+                                    _focusNode.unfocus();
+                                  });
+                                },
+                              )
+                                  : null,
+                            ),
+                            // 🚨 الفاليديشن: لو كتب أي حاجة بإيده نلغي الـ pick عشان الزرار يقفل
+                            onChanged: (_) {
+                              if (_pick != null) setState(() => _pick = null);
+                            },
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: AlignmentDirectional.topStart,
+                            child: Material(
+                              elevation: 8,
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(8.r),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                    maxHeight: 250.h, maxWidth: 300.w),
+                                child: ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) =>
+                                      Divider(height: 1, color: theme.dividerColor),
+                                  itemBuilder: (context, index) {
+                                    final item = options.elementAt(index);
+                                    return InkWell(
+                                      onTap: () => onSelected(item),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 12.w, vertical: 10.h),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(item.name,
+                                                  style: TextStyle(
+                                                      fontSize: 13.sp,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: theme.textTheme.bodyMedium?.color),
+                                                  overflow: TextOverflow.ellipsis),
+                                            ),
+                                            SizedBox(width: 8.w),
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 6.w, vertical: 2.h),
+                                              decoration: BoxDecoration(
+                                                color: ColorsManager.primaryColor.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(4.r),
+                                              ),
+                                              child: Text(
+                                                'متوفر: ${item.availableQty}',
+                                                style: TextStyle(
+                                                    fontSize: 11.sp,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: ColorsManager.primaryColor),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     SizedBox(width: 10.w),
                     _FlatBtn(
                       label: 'invoices.add_item_row'.tr(),
                       icon: Icons.add,
-                      enabled: _pick != null,
+                      enabled: _pick != null, // 🚨 لا يمكن الضغط إلا إذا اختار من القائمة
                       onTap: _pick == null
                           ? () {}
                           : () {
                         widget.onAdd(_pick!);
-                        setState(() => _pick = null);
+                        setState(() {
+                          _pick = null;
+                          _searchCtrl.clear();
+                          _focusNode.requestFocus();
+                        });
                       },
                     ),
                   ],
