@@ -283,6 +283,79 @@ class SuppliersCubit extends Cubit<SuppliersState> {
     );
   }
 
+  // ── 🆕 إلغاء فاتورة خدمات ─────────────────────────────────────────────────
+
+  Future<void> cancelServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    String? reason,
+  }) async {
+    emit(state.copyWith(
+        serviceInvoiceCancelStatus: ServiceInvoiceCancelStatus.loading,
+        clearError: true));
+    final result = await _repository.cancelServiceInvoice(
+        invoiceId: invoiceId, supplierId: supplierId, reason: reason);
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          serviceInvoiceCancelStatus: ServiceInvoiceCancelStatus.failure,
+          errorMessage: f.message)),
+          (_) async {
+        emit(state.copyWith(
+            serviceInvoiceCancelStatus: ServiceInvoiceCancelStatus.success));
+        await fetchSupplierServiceInvoices(supplierId);
+        await fetchSuppliers();
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (!isClosed) {
+          emit(state.copyWith(
+              serviceInvoiceCancelStatus: ServiceInvoiceCancelStatus.idle));
+        }
+      },
+    );
+  }
+
+  // ── 🆕 تعديل فاتورة خدمات ─────────────────────────────────────────────────
+
+  Future<void> editServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  }) async {
+    emit(state.copyWith(
+        serviceInvoiceEditStatus: ServiceInvoiceEditStatus.loading,
+        clearError: true));
+    final result = await _repository.editServiceInvoice(
+      invoiceId:       invoiceId,
+      supplierId:      supplierId,
+      discount:        discount,
+      notes:           notes,
+      deletedItemIds:  deletedItemIds,
+      existingUpdates: existingUpdates,
+      newItems:        newItems,
+    );
+    if (isClosed) return;
+    result.fold(
+          (f) => emit(state.copyWith(
+          serviceInvoiceEditStatus: ServiceInvoiceEditStatus.failure,
+          errorMessage: f.message)),
+          (_) async {
+        emit(state.copyWith(
+            serviceInvoiceEditStatus: ServiceInvoiceEditStatus.success));
+        await fetchSupplierServiceInvoices(supplierId);
+        await fetchSuppliers();
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (!isClosed) {
+          emit(state.copyWith(
+              serviceInvoiceEditStatus: ServiceInvoiceEditStatus.idle));
+        }
+      },
+    );
+  }
+
   // ── Clearing ──────────────────────────────────────────────
 
   Future<void> executeSupplierClearing({

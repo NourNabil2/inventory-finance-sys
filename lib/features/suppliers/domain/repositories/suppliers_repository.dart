@@ -60,6 +60,25 @@ abstract class SuppliersRepository {
     required double amount,
     required String method,
   });
+
+  // 🆕
+  Future<Either<Failure, void>> cancelServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    String? reason,
+  });
+
+  // 🆕
+  Future<Either<Failure, void>> editServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  });
+
   Future<Either<Failure, ClearingResult>> executeSupplierClearing({
     required String supplierId,
     required double amount,

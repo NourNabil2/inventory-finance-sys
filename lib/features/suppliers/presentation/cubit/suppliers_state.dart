@@ -6,8 +6,10 @@ enum SupplierFormStatus    { idle, submitting, submitted, error }
 enum ClearingStatus        { idle, loading, success, failure }
 enum LinkCustomerStatus    { idle, loading, success, failure }
 enum ServiceInvoicesStatus { idle, loading, success, failure }
-enum InvoiceEditStatus     { idle, loading, success, failure } // 🆕
-enum InvoiceCancelStatus   { idle, loading, success, failure } // 🆕
+enum InvoiceEditStatus          { idle, loading, success, failure } // 🆕
+enum InvoiceCancelStatus        { idle, loading, success, failure } // 🆕
+enum ServiceInvoiceEditStatus   { idle, loading, success, failure } // 🆕
+enum ServiceInvoiceCancelStatus { idle, loading, success, failure } // 🆕
 
 enum SupplierLedgerTab { purchases, services }
 
@@ -32,9 +34,11 @@ final class SuppliersState extends Equatable {
   final ClearingStatus  clearingStatus;
   final ClearingResult? lastClearingResult;
 
-  final LinkCustomerStatus   linkCustomerStatus;
-  final InvoiceEditStatus    invoiceEditStatus;   // 🆕
-  final InvoiceCancelStatus  invoiceCancelStatus; // 🆕
+  final LinkCustomerStatus          linkCustomerStatus;
+  final InvoiceEditStatus           invoiceEditStatus;          // 🆕
+  final InvoiceCancelStatus         invoiceCancelStatus;        // 🆕
+  final ServiceInvoiceEditStatus    serviceInvoiceEditStatus;   // 🆕
+  final ServiceInvoiceCancelStatus  serviceInvoiceCancelStatus; // 🆕
 
   const SuppliersState({
     this.status                = SuppliersStatus.initial,
@@ -52,9 +56,11 @@ final class SuppliersState extends Equatable {
     this.activeTab             = SupplierLedgerTab.purchases,
     this.clearingStatus        = ClearingStatus.idle,
     this.lastClearingResult,
-    this.linkCustomerStatus    = LinkCustomerStatus.idle,
-    this.invoiceEditStatus     = InvoiceEditStatus.idle,
-    this.invoiceCancelStatus   = InvoiceCancelStatus.idle,
+    this.linkCustomerStatus             = LinkCustomerStatus.idle,
+    this.invoiceEditStatus              = InvoiceEditStatus.idle,
+    this.invoiceCancelStatus            = InvoiceCancelStatus.idle,
+    this.serviceInvoiceEditStatus       = ServiceInvoiceEditStatus.idle,
+    this.serviceInvoiceCancelStatus     = ServiceInvoiceCancelStatus.idle,
   });
 
   SuppliersState copyWith({
@@ -83,6 +89,8 @@ final class SuppliersState extends Equatable {
     LinkCustomerStatus?          linkCustomerStatus,
     InvoiceEditStatus?           invoiceEditStatus,
     InvoiceCancelStatus?         invoiceCancelStatus,
+    ServiceInvoiceEditStatus?    serviceInvoiceEditStatus,
+    ServiceInvoiceCancelStatus?  serviceInvoiceCancelStatus,
   }) {
     return SuppliersState(
       status:                 status             ?? this.status,
@@ -100,20 +108,24 @@ final class SuppliersState extends Equatable {
       searchQuery:            searchQuery        ?? this.searchQuery,
       clearingStatus:         clearingStatus     ?? this.clearingStatus,
       lastClearingResult:     clearClearingResult ? null : lastClearingResult ?? this.lastClearingResult,
-      linkCustomerStatus:     linkCustomerStatus ?? this.linkCustomerStatus,
-      invoiceEditStatus:      invoiceEditStatus   ?? this.invoiceEditStatus,
-      invoiceCancelStatus:    invoiceCancelStatus ?? this.invoiceCancelStatus,
+      linkCustomerStatus:         linkCustomerStatus    ?? this.linkCustomerStatus,
+      invoiceEditStatus:          invoiceEditStatus     ?? this.invoiceEditStatus,
+      invoiceCancelStatus:        invoiceCancelStatus   ?? this.invoiceCancelStatus,
+      serviceInvoiceEditStatus:   serviceInvoiceEditStatus   ?? this.serviceInvoiceEditStatus,
+      serviceInvoiceCancelStatus: serviceInvoiceCancelStatus ?? this.serviceInvoiceCancelStatus,
     );
   }
 
-  bool get isLoading                => status == SuppliersStatus.loading;
-  bool get hasError                 => status == SuppliersStatus.failure;
-  bool get hasSuppliers             => filtered.isNotEmpty;
-  bool get isClearingInProgress     => clearingStatus == ClearingStatus.loading;
-  bool get isLinkingInProgress      => linkCustomerStatus == LinkCustomerStatus.loading;
-  bool get isServiceInvoicesLoading => serviceInvoicesStatus == ServiceInvoicesStatus.loading;
-  bool get isInvoiceEditLoading     => invoiceEditStatus == InvoiceEditStatus.loading;
-  bool get isInvoiceCancelLoading   => invoiceCancelStatus == InvoiceCancelStatus.loading;
+  bool get isLoading                       => status == SuppliersStatus.loading;
+  bool get hasError                        => status == SuppliersStatus.failure;
+  bool get hasSuppliers                    => filtered.isNotEmpty;
+  bool get isClearingInProgress            => clearingStatus == ClearingStatus.loading;
+  bool get isLinkingInProgress             => linkCustomerStatus == LinkCustomerStatus.loading;
+  bool get isServiceInvoicesLoading        => serviceInvoicesStatus == ServiceInvoicesStatus.loading;
+  bool get isInvoiceEditLoading            => invoiceEditStatus == InvoiceEditStatus.loading;
+  bool get isInvoiceCancelLoading          => invoiceCancelStatus == InvoiceCancelStatus.loading;
+  bool get isServiceInvoiceEditLoading     => serviceInvoiceEditStatus == ServiceInvoiceEditStatus.loading;
+  bool get isServiceInvoiceCancelLoading   => serviceInvoiceCancelStatus == ServiceInvoiceCancelStatus.loading;
 
   @override
   List<Object?> get props => [
@@ -123,5 +135,6 @@ final class SuppliersState extends Equatable {
     activeTab, errorMessage, searchQuery,
     clearingStatus, lastClearingResult,
     linkCustomerStatus, invoiceEditStatus, invoiceCancelStatus,
+    serviceInvoiceEditStatus, serviceInvoiceCancelStatus,
   ];
 }

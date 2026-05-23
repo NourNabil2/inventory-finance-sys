@@ -1,8 +1,4 @@
 // lib/features/customers/data/datasources/invoices_remote_datasource.dart
-
-import 'dart:convert';
-import 'dart:developer';
-
 import 'package:bungee_manage_sys/core/errors/error_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -160,13 +156,6 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
             .map((id) => {'id': id})
             .toList();
       }
-      log('=== editInvoice params ===');
-      log('p_invoice_id: $invoiceId');
-      log('p_new_items: ${jsonEncode(newItems)}');
-      log('p_existing_updates: ${jsonEncode(existingUpdates)}');
-      log('p_deleted_item_ids: $deletedItemIds');
-      log('p_new_discount: $newDiscount');
-      log('p_new_status: $newStatus');
       await _supabase.rpc('edit_invoice_transaction', params: params);
     } catch (e, st) {
       throw ErrorHandler.handleException(e, st);

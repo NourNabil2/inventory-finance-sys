@@ -40,11 +40,20 @@ class SupplierUnifiedDetailView extends StatelessWidget {
             .where((s) => s.id == supplier.id)
             .firstOrNull ?? supplier;
 
+        // ── Purchase invoice detail ──
         if (state.selectedInvoice != null) {
           final freshInv = state.invoices
               .where((i) => i.id == state.selectedInvoice!.id)
               .firstOrNull ?? state.selectedInvoice!;
           return _InvoiceDetailShell(invoice: freshInv, supplierId: fresh.id);
+        }
+
+        // ── Service invoice detail (inline, same flow) ──
+        if (state.selectedServiceInvoice != null) {
+          final freshSvc = state.serviceInvoices
+              .where((i) => i.id == state.selectedServiceInvoice!.id)
+              .firstOrNull ?? state.selectedServiceInvoice!;
+          return _ServiceInvoiceDetailShell(invoice: freshSvc, supplierId: fresh.id);
         }
 
         return _UnifiedProfileShell(supplier: fresh);
@@ -484,12 +493,7 @@ class _ServiceInvoiceTile extends StatelessWidget {
     final fmt   = DateFormat('d MMM yyyy');
 
     return InkWell(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => BlocProvider.value(
-          value: context.read<SuppliersCubit>(),
-          child: _ServiceInvoiceDetailPage(invoice: invoice, supplierId: supplierId),
-        ),
-      )),
+      onTap: () => context.read<SuppliersCubit>().selectServiceInvoice(invoice),
       borderRadius: BorderRadius.circular(8.r),
       child: AppCard(
         padding: EdgeInsets.all(14.w),
@@ -679,13 +683,14 @@ class _InvoiceDetailShell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service invoice detail page
+// Service invoice detail shell — مع أزرار تعديل وإلغاء وجدول البنود
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ServiceInvoiceDetailPage extends StatelessWidget {
+class _ServiceInvoiceDetailShell extends StatelessWidget {
   final ServiceInvoiceEntity invoice;
   final String supplierId;
-  const _ServiceInvoiceDetailPage({required this.invoice, required this.supplierId});
+
+  const _ServiceInvoiceDetailShell({required this.invoice, required this.supplierId});
 
   @override
   Widget build(BuildContext context) {
@@ -693,44 +698,90 @@ class _ServiceInvoiceDetailPage extends StatelessWidget {
     final cur   = 'dashboard.currency'.tr();
     final fmt   = DateFormat('EEEE, d MMMM yyyy');
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
+    return BlocConsumer<SuppliersCubit, SuppliersState>(
+      listenWhen: (p, c) =>
+      p.serviceInvoiceCancelStatus != c.serviceInvoiceCancelStatus ||
+          p.serviceInvoiceEditStatus   != c.serviceInvoiceEditStatus,
+      listener: (ctx, state) {
+        if (state.serviceInvoiceCancelStatus == ServiceInvoiceCancelStatus.success) {
+          ctx.showSuccess('تم إلغاء الفاتورة وتحديث مديونية المورد');
+          ctx.read<SuppliersCubit>().clearSelectedServiceInvoice();
+        } else if (state.serviceInvoiceCancelStatus == ServiceInvoiceCancelStatus.failure) {
+          ctx.showError(state.errorMessage ?? 'فشل الإلغاء');
+        }
+        if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.success) {
+          ctx.showSuccess('تم تعديل الفاتورة بنجاح');
+        } else if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.failure) {
+          ctx.showError(state.errorMessage ?? 'فشل التعديل');
+        }
+      },
+      builder: (ctx, state) {
+        final isEditLoading   = state.isServiceInvoiceEditLoading;
+        final isCancelLoading = state.isServiceInvoiceCancelLoading;
+        final busy = isEditLoading || isCancelLoading;
+
+        return Column(
           children: [
+            // ── Header ──────────────────────────────────────────────────────────
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
               decoration: BoxDecoration(
-                color: theme.cardColor,
+                color:  theme.cardColor,
                 border: Border(bottom: BorderSide(color: theme.dividerColor)),
               ),
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back_ios, size: 18.r),
-                    onPressed: () => Navigator.of(context).pop(),
+                    icon:      Icon(Icons.arrow_back_ios, size: 18.r),
+                    onPressed: busy
+                        ? null
+                        : () => ctx.read<SuppliersCubit>().clearSelectedServiceInvoice(),
                   ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('تفاصيل فاتورة الخدمات',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16.sp,
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15.sp,
                                 color: theme.textTheme.titleSmall?.color)),
                         Text('#${invoice.id.substring(0, 8).toUpperCase()}',
-                            style: TextStyle(fontSize: 12.sp, color: ColorsManager.defaultTextSecondary)),
+                            style: TextStyle(fontSize: 11.sp,
+                                color: ColorsManager.defaultTextSecondary)),
                       ],
                     ),
+                  ),
+                  // ── أزرار تعديل وإلغاء ──────────────────────────────────────
+                  IconButton(
+                    icon: isEditLoading
+                        ? SizedBox(width: 18.r, height: 18.r,
+                        child: const CircularProgressIndicator(strokeWidth: 2))
+                        : Icon(Icons.edit_outlined, size: 20.r,
+                        color: ColorsManager.primaryColor),
+                    tooltip:  'تعديل الفاتورة',
+                    onPressed: busy ? null : () => _showEditDialog(ctx),
+                  ),
+                  IconButton(
+                    icon: isCancelLoading
+                        ? SizedBox(width: 18.r, height: 18.r,
+                        child: const CircularProgressIndicator(
+                            strokeWidth: 2, color: ColorsManager.errorText))
+                        : Icon(Icons.cancel_outlined, size: 20.r,
+                        color: ColorsManager.errorText),
+                    tooltip:  'إلغاء الفاتورة',
+                    onPressed: busy ? null : () => _showCancelDialog(ctx),
                   ),
                 ],
               ),
             ),
+
+            // ── Body ────────────────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(16.w),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Header card ──
                     AppCard(
                       child: Column(
                         children: [
@@ -742,7 +793,8 @@ class _ServiceInvoiceDetailPage extends StatelessWidget {
                                   color: ColorsManager.successFill.withOpacity(0.12),
                                   borderRadius: BorderRadius.circular(12.r),
                                 ),
-                                child: Icon(Icons.receipt_outlined, size: 24.r, color: ColorsManager.successText),
+                                child: Icon(Icons.receipt_outlined, size: 24.r,
+                                    color: ColorsManager.successText),
                               ),
                               SizedBox(width: 12.w),
                               Expanded(
@@ -750,113 +802,279 @@ class _ServiceInvoiceDetailPage extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('فاتورة خدمة',
-                                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15.sp,
+                                        style: TextStyle(fontWeight: FontWeight.w700,
+                                            fontSize: 15.sp,
                                             color: theme.textTheme.titleSmall?.color)),
                                     SizedBox(height: 2.h),
                                     Text(fmt.format(invoice.createdAt),
-                                        style: TextStyle(fontSize: 12.sp, color: ColorsManager.defaultTextSecondary)),
+                                        style: TextStyle(fontSize: 12.sp,
+                                            color: ColorsManager.defaultTextSecondary)),
+                                    if (invoice.invoiceNumber.isNotEmpty)
+                                      Text('رقم: ${invoice.invoiceNumber}',
+                                          style: TextStyle(fontSize: 11.sp,
+                                              color: ColorsManager.defaultTextSecondary)),
                                   ],
                                 ),
                               ),
-                              StatusChip(label: _getServiceStatusLabel(invoice.status),
-                                  status: _getServiceChipStatus(invoice.status)),
+                              StatusChip(
+                                label:  _getServiceStatusLabel(invoice.status),
+                                status: _getServiceChipStatus(invoice.status),
+                              ),
                             ],
                           ),
+                          if (invoice.jobName != null && invoice.jobName!.isNotEmpty) ...[
+                            SizedBox(height: 8.h),
+                            _InfoRow(icon: Icons.movie_outlined,
+                                text: 'مشروع: ${invoice.jobName!}'),
+                          ],
+                          if (invoice.production != null && invoice.production!.isNotEmpty)
+                            _InfoRow(icon: Icons.business_outlined,
+                                text: 'إنتاج: ${invoice.production!}'),
                           if (invoice.notes != null && invoice.notes!.isNotEmpty) ...[
-                            SizedBox(height: 12.h),
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                              decoration: BoxDecoration(
-                                color: theme.scaffoldBackgroundColor,
-                                borderRadius: BorderRadius.circular(8.r),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.notes_rounded, size: 16.r, color: ColorsManager.defaultTextSecondary),
-                                  SizedBox(width: 8.w),
-                                  Expanded(child: Text(invoice.notes!,
-                                      style: TextStyle(fontSize: 13.sp, color: ColorsManager.defaultTextSecondary))),
-                                ],
-                              ),
-                            ),
+                            SizedBox(height: 8.h),
+                            _InfoRow(icon: Icons.notes_rounded, text: invoice.notes!),
                           ],
                         ],
                       ),
                     ),
                     SizedBox(height: 12.h),
+
+                    // ── Payment progress card ──
                     AppCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('تفاصيل المبلغ',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.sp,
-                                  color: theme.textTheme.titleSmall?.color)),
-                          SizedBox(height: 16.h),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('نسبة السداد',
-                                  style: TextStyle(fontSize: 13.sp, color: ColorsManager.defaultTextSecondary)),
+                              Text('حالة السداد',
+                                  style: TextStyle(fontWeight: FontWeight.w600,
+                                      fontSize: 13.sp,
+                                      color: theme.textTheme.titleSmall?.color)),
                               Text('${invoice.paymentPercent.toStringAsFixed(0)}%',
-                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.sp,
-                                      color: invoice.isFullyPaid ? ColorsManager.successText : ColorsManager.primaryColor)),
+                                  style: TextStyle(fontWeight: FontWeight.w700,
+                                      fontSize: 13.sp,
+                                      color: invoice.isFullyPaid
+                                          ? ColorsManager.successFill
+                                          : ColorsManager.primaryColor)),
                             ],
                           ),
                           SizedBox(height: 8.h),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(4.r),
                             child: LinearProgressIndicator(
-                              value: invoice.paymentPercent / 100,
-                              minHeight: 8.h,
+                              value:           invoice.paymentPercent / 100,
+                              minHeight:       8.h,
                               backgroundColor: theme.dividerColor,
                               valueColor: AlwaysStoppedAnimation(
-                                  invoice.isFullyPaid ? ColorsManager.successFill : ColorsManager.primaryColor),
+                                  invoice.isFullyPaid
+                                      ? ColorsManager.successFill
+                                      : ColorsManager.primaryColor),
                             ),
                           ),
                           SizedBox(height: 16.h),
-
-                          // 🚨 التعديل السحري للملخص عشان يظهر الخصم والصافي 🚨
                           Wrap(
-                            spacing: 8.w,
+                            spacing:    8.w,
                             runSpacing: 12.h,
-                            alignment: WrapAlignment.spaceBetween,
+                            alignment:  WrapAlignment.spaceBetween,
                             children: [
-                              _AmountItem(label: 'الإجمالي (قبل)',
-                                  value: '$cur ${invoice.totalAmount.toStringAsFixed(0)}',
-                                  color: theme.textTheme.bodyMedium?.color ?? Colors.black),
+                              _AmountItem(
+                                label: 'الإجمالي (قبل)',
+                                value: '$cur ${invoice.totalAmount.toStringAsFixed(0)}',
+                                color: theme.textTheme.bodyMedium?.color ?? Colors.black,
+                              ),
                               if (invoice.discount > 0)
-                                _AmountItem(label: 'الخصم',
-                                    value: '-$cur ${invoice.discount.toStringAsFixed(0)}',
-                                    color: ColorsManager.warningText),
-                              _AmountItem(label: 'الصافي النهائي',
-                                  value: '$cur ${invoice.netTotal.toStringAsFixed(0)}',
-                                  color: ColorsManager.primaryColor),
-                              _AmountItem(label: 'المدفوع',
-                                  value: '$cur ${invoice.paidAmount.toStringAsFixed(0)}',
-                                  color: ColorsManager.successText),
-                              _AmountItem(label: 'المتبقي',
-                                  value: '$cur ${invoice.remaining.toStringAsFixed(0)}',
-                                  color: invoice.remaining > 0 ? ColorsManager.errorText : ColorsManager.successText),
+                                _AmountItem(
+                                  label: 'الخصم',
+                                  value: '-$cur ${invoice.discount.toStringAsFixed(0)}',
+                                  color: ColorsManager.warningText,
+                                ),
+                              _AmountItem(
+                                label: 'الصافي النهائي',
+                                value: '$cur ${invoice.netTotal.toStringAsFixed(0)}',
+                                color: ColorsManager.primaryColor,
+                              ),
+                              _AmountItem(
+                                label: 'المدفوع',
+                                value: '$cur ${invoice.paidAmount.toStringAsFixed(0)}',
+                                color: ColorsManager.successText,
+                              ),
+                              _AmountItem(
+                                label: 'المتبقي',
+                                value: '$cur ${invoice.remaining.toStringAsFixed(0)}',
+                                color: invoice.remaining > 0
+                                    ? ColorsManager.errorText
+                                    : ColorsManager.successText,
+                              ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(height: 16.h),
+                    SizedBox(height: 12.h),
+
+                    // ── 🆕 Items table ───────────────────────────────────────────
+                    if (invoice.items.isNotEmpty) ...[
+                      Text('الأصناف',
+                          style: TextStyle(fontWeight: FontWeight.w600,
+                              fontSize: 14.sp,
+                              color: theme.textTheme.titleSmall?.color)),
+                      SizedBox(height: 8.h),
+                      AppCard(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8.r),
+                          child: Column(
+                            children: [
+                              // Table header
+                              Container(
+                                color:   theme.scaffoldBackgroundColor,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 14.w, vertical: 10.h),
+                                child: Row(children: [
+                                  Expanded(flex: 4,
+                                      child: Text('الصنف',
+                                          style: TextStyle(fontSize: 11.sp,
+                                              fontWeight: FontWeight.w600,
+                                              color: ColorsManager.defaultTextSecondary))),
+                                  _SvcColHdr('الكمية'),
+                                  _SvcColHdr('الأيام'),
+                                  _SvcColHdr('سعر/يوم'),
+                                  _SvcColHdr('الإجمالي', end: true),
+                                ]),
+                              ),
+                              ...invoice.items.map((item) => Column(children: [
+                                Divider(height: 1, color: theme.dividerColor),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 14.w, vertical: 10.h),
+                                  child: Row(children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(item.itemName ?? '-',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13.sp,
+                                                  color: theme.textTheme.bodyMedium?.color),
+                                              overflow: TextOverflow.ellipsis),
+                                          if (item.itemModel != null)
+                                            Text(item.itemModel!,
+                                                style: TextStyle(fontSize: 10.sp,
+                                                    color: ColorsManager.defaultTextSecondary)),
+                                          if (item.isFullyReturned)
+                                            Container(
+                                              margin: EdgeInsets.only(top: 2.h),
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 6.w, vertical: 1.h),
+                                              decoration: BoxDecoration(
+                                                color: ColorsManager.successFill.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4.r),
+                                              ),
+                                              child: Text('مُسترجع',
+                                                  style: TextStyle(fontSize: 9.sp,
+                                                      color: ColorsManager.successText,
+                                                      fontWeight: FontWeight.w600)),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    _SvcCell('${item.qty}'),
+                                    _SvcCell('${item.days}'),
+                                    _SvcCell(item.pricePerDay.toStringAsFixed(0)),
+                                    _SvcCell(item.lineTotal.toStringAsFixed(0),
+                                        end: true, bold: true),
+                                  ]),
+                                ),
+                              ])),
+                              // Footer totals
+                              Divider(height: 1, color: theme.dividerColor),
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 14.w, vertical: 8.h),
+                                child: Row(children: [
+                                  Expanded(flex: 4,
+                                      child: Text('الإجمالي',
+                                          style: TextStyle(fontSize: 12.sp,
+                                              color: theme.textTheme.bodyMedium?.color))),
+                                  const _SvcCell(''), const _SvcCell(''),
+                                  const _SvcCell(''),
+                                  _SvcCell('$cur ${invoice.totalAmount.toStringAsFixed(0)}',
+                                      end: true),
+                                ]),
+                              ),
+                              if (invoice.discount > 0)
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 14.w, vertical: 8.h),
+                                  child: Row(children: [
+                                    Expanded(flex: 4,
+                                        child: Text('الخصم',
+                                            style: TextStyle(fontSize: 12.sp,
+                                                color: ColorsManager.warningText))),
+                                    const _SvcCell(''), const _SvcCell(''),
+                                    const _SvcCell(''),
+                                    _SvcCell(
+                                        '-$cur ${invoice.discount.toStringAsFixed(0)}',
+                                        end: true,
+                                        color: ColorsManager.warningText),
+                                  ]),
+                                ),
+                              Divider(height: 1, color: theme.dividerColor),
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 14.w, vertical: 10.h),
+                                child: Row(children: [
+                                  Expanded(flex: 4,
+                                      child: Text('الصافي النهائي',
+                                          style: TextStyle(fontWeight: FontWeight.w700,
+                                              fontSize: 13.sp,
+                                              color: theme.textTheme.bodyMedium?.color))),
+                                  const _SvcCell(''), const _SvcCell(''),
+                                  const _SvcCell(''),
+                                  _SvcCell(
+                                      '$cur ${invoice.netTotal.toStringAsFixed(0)}',
+                                      end: true, bold: true,
+                                      color: ColorsManager.primaryColor),
+                                ]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12.h),
+                    ],
+
+                    // ── Pay button ───────────────────────────────────────────────
                     if (!invoice.isFullyPaid)
                       SizedBox(
-                        width: double.infinity, height: 48.h,
+                        width: double.infinity,
+                        height: 48.h,
                         child: ElevatedButton.icon(
-                          onPressed: () => _showServicePaymentDialog(context, invoice),
+                          onPressed: busy ? null : () {
+                            final cubit = ctx.read<SuppliersCubit>();
+                            showDialog(
+                              context: ctx,
+                              builder: (_) => BlocProvider.value(
+                                value: cubit,
+                                child: _ServicePaymentDialog(
+                                    invoice: invoice, supplierId: supplierId),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: ColorsManager.primaryColor,
                             foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                            elevation:       0,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10.r)),
                           ),
-                          icon: Icon(Icons.payments_outlined, size: 20.r),
+                          icon:  Icon(Icons.payments_outlined, size: 20.r),
                           label: Text('تسجيل دفعة',
-                              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700)),
+                              style: TextStyle(fontSize: 14.sp,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ),
                   ],
@@ -864,19 +1082,403 @@ class _ServiceInvoiceDetailPage extends StatelessWidget {
               ),
             ),
           ],
-        ),
+        );
+      },
+    );
+  }
+
+  void _showEditDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BlocProvider.value(
+        value: context.read<SuppliersCubit>(),
+        child: _ServiceInvoiceEditDialog(invoice: invoice, supplierId: supplierId),
       ),
     );
   }
 
-  void _showServicePaymentDialog(BuildContext context, ServiceInvoiceEntity inv) {
-    final cubit = context.read<SuppliersCubit>();
-    showDialog(
+  void _showCancelDialog(BuildContext context) {
+    showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (_) => BlocProvider.value(
-        value: cubit,
-        child: _ServicePaymentDialog(invoice: inv, supplierId: supplierId),
+        value: context.read<SuppliersCubit>(),
+        child: _ServiceInvoiceCancelDialog(invoice: invoice, supplierId: supplierId),
       ),
+    );
+  }
+}
+
+// ── Small helper widgets ──────────────────────────────────────────────────────
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String   text;
+  const _InfoRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(top: 6.h),
+    child: Row(children: [
+      Icon(icon, size: 14.r, color: ColorsManager.defaultTextSecondary),
+      SizedBox(width: 6.w),
+      Expanded(child: Text(text,
+          style: TextStyle(fontSize: 12.sp,
+              color: ColorsManager.defaultTextSecondary))),
+    ]),
+  );
+}
+
+class _SvcColHdr extends StatelessWidget {
+  final String text;
+  final bool   end;
+  const _SvcColHdr(this.text, {this.end = false});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 66.w,
+    child: Text(text,
+        style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600,
+            color: ColorsManager.defaultTextSecondary),
+        textAlign: end ? TextAlign.end : TextAlign.center),
+  );
+}
+
+class _SvcCell extends StatelessWidget {
+  final String text;
+  final bool   end;
+  final bool   bold;
+  final Color? color;
+  const _SvcCell(this.text, {this.end = false, this.bold = false, this.color});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 66.w,
+    child: Text(text,
+        style: TextStyle(fontSize: 13.sp,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+            color: color ?? Theme.of(context).textTheme.bodyMedium?.color),
+        textAlign: end ? TextAlign.end : TextAlign.center),
+  );
+}
+
+// ── 🆕 Edit dialog ────────────────────────────────────────────────────────────
+
+class _ServiceInvoiceEditDialog extends StatefulWidget {
+  final ServiceInvoiceEntity invoice;
+  final String supplierId;
+  const _ServiceInvoiceEditDialog({required this.invoice, required this.supplierId});
+
+  @override
+  State<_ServiceInvoiceEditDialog> createState() => _ServiceInvoiceEditDialogState();
+}
+
+class _ServiceInvoiceEditDialogState extends State<_ServiceInvoiceEditDialog> {
+  late final TextEditingController _discCtrl;
+  late final TextEditingController _notesCtrl;
+  bool _isPopping = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _discCtrl  = TextEditingController(
+        text: widget.invoice.discount.toStringAsFixed(0));
+    _notesCtrl = TextEditingController(text: widget.invoice.notes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _discCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cur   = 'dashboard.currency'.tr();
+
+    return BlocConsumer<SuppliersCubit, SuppliersState>(
+      listenWhen: (p, c) =>
+      p.serviceInvoiceEditStatus != c.serviceInvoiceEditStatus,
+      listener: (ctx, state) {
+        if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.success) {
+          if (_isPopping || !mounted) return;
+          _isPopping = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(ctx).pop();
+          });
+        } else if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.failure) {
+          ctx.showError(state.errorMessage ?? 'فشل التعديل');
+        }
+      },
+      builder: (ctx, state) {
+        final loading = state.isServiceInvoiceEditLoading;
+        final disc    = double.tryParse(_discCtrl.text) ?? 0;
+        final net     = (widget.invoice.totalAmount - disc).clamp(0.0, double.infinity);
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+          title: Row(children: [
+            Icon(Icons.edit_outlined, color: ColorsManager.primaryColor, size: 22.r),
+            SizedBox(width: 8.w),
+            Text('تعديل فاتورة الخدمات',
+                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700)),
+          ]),
+          content: SizedBox(
+            width: 400.w,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(10.r),
+                  decoration: BoxDecoration(
+                    color: ColorsManager.primaryColor.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(8.r),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.info_outline, size: 14.r,
+                        color: ColorsManager.primaryColor),
+                    SizedBox(width: 8.w),
+                    Expanded(child: Text(
+                      'الإجمالي: $cur ${widget.invoice.totalAmount.toStringAsFixed(0)}'
+                          '   →   صافي بعد الخصم: $cur ${net.toStringAsFixed(0)}',
+                      style: TextStyle(fontSize: 12.sp,
+                          color: ColorsManager.primaryColor,
+                          fontWeight: FontWeight.w600),
+                    )),
+                  ]),
+                ),
+                SizedBox(height: 14.h),
+                Text('خصم الفاتورة ($cur)',
+                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600,
+                        color: theme.textTheme.titleSmall?.color)),
+                SizedBox(height: 6.h),
+                TextFormField(
+                  controller: _discCtrl,
+                  enabled:    !loading,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    suffixText: cur,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r)),
+                  ),
+                ),
+                SizedBox(height: 14.h),
+                Text('ملاحظات',
+                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600,
+                        color: theme.textTheme.titleSmall?.color)),
+                SizedBox(height: 6.h),
+                TextFormField(
+                  controller: _notesCtrl,
+                  enabled:    !loading,
+                  maxLines:   2,
+                  decoration: InputDecoration(
+                    hintText: 'ملاحظات (اختياري)',
+                    border:   OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.of(context).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: loading ? null : () {
+                final disc = double.tryParse(_discCtrl.text) ?? 0;
+                if (disc < 0) {
+                  context.showError('الخصم لا يمكن أن يكون سالباً');
+                  return;
+                }
+                final net = widget.invoice.totalAmount - disc;
+                if (net < widget.invoice.paidAmount) {
+                  context.showError(
+                      'الصافي (${net.toStringAsFixed(0)}) أقل من المدفوع '
+                          '(${widget.invoice.paidAmount.toStringAsFixed(0)})');
+                  return;
+                }
+                context.read<SuppliersCubit>().editServiceInvoice(
+                  invoiceId:       widget.invoice.id,
+                  supplierId:      widget.supplierId,
+                  discount:        disc,
+                  notes:           _notesCtrl.text.trim().isEmpty
+                      ? null : _notesCtrl.text.trim(),
+                  deletedItemIds:  const [],
+                  existingUpdates: const [],
+                  newItems:        const [],
+                );
+              },
+              icon: loading
+                  ? SizedBox(width: 14.r, height: 14.r,
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+                  : Icon(Icons.save_outlined, size: 16.r),
+              label: Text('حفظ التعديلات',
+                  style: TextStyle(fontSize: 13.sp)),
+              style: FilledButton.styleFrom(
+                  backgroundColor: ColorsManager.primaryColor),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── 🆕 Cancel dialog ──────────────────────────────────────────────────────────
+
+class _ServiceInvoiceCancelDialog extends StatefulWidget {
+  final ServiceInvoiceEntity invoice;
+  final String supplierId;
+  const _ServiceInvoiceCancelDialog({required this.invoice, required this.supplierId});
+
+  @override
+  State<_ServiceInvoiceCancelDialog> createState() =>
+      _ServiceInvoiceCancelDialogState();
+}
+
+class _ServiceInvoiceCancelDialogState
+    extends State<_ServiceInvoiceCancelDialog> {
+  late final TextEditingController _reasonCtrl;
+  bool _isPopping = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reasonCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.##');
+    final cur = 'dashboard.currency'.tr();
+
+    return BlocConsumer<SuppliersCubit, SuppliersState>(
+      listenWhen: (p, c) =>
+      p.serviceInvoiceCancelStatus != c.serviceInvoiceCancelStatus,
+      listener: (ctx, state) {
+        if (state.serviceInvoiceCancelStatus ==
+            ServiceInvoiceCancelStatus.success) {
+          if (_isPopping || !mounted) return;
+          _isPopping = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(ctx).pop();
+          });
+        } else if (state.serviceInvoiceCancelStatus ==
+            ServiceInvoiceCancelStatus.failure) {
+          if (!ctx.mounted) return;
+          ctx.showError(state.errorMessage ?? 'فشل الإلغاء');
+        }
+      },
+      builder: (ctx, state) {
+        final loading = state.isServiceInvoiceCancelLoading;
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.r)),
+          title: Row(children: [
+            Icon(Icons.cancel_outlined,
+                color: ColorsManager.errorText, size: 22.r),
+            SizedBox(width: 8.w),
+            Text('إلغاء فاتورة الخدمات',
+                style: TextStyle(
+                    fontSize: 16.sp, fontWeight: FontWeight.w700)),
+          ]),
+          content: SizedBox(
+            width: 400.w,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: ColorsManager.errorText.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8.r),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('سيتم خصم هذه الفاتورة من مديونية المورد علينا:',
+                          style: TextStyle(fontSize: 12.sp,
+                              color: ColorsManager.errorText,
+                              fontWeight: FontWeight.w600)),
+                      SizedBox(height: 6.h),
+                      Text(
+                          'الصافي: ${fmt.format(widget.invoice.netTotal)} $cur',
+                          style: TextStyle(fontSize: 14.sp,
+                              fontWeight: FontWeight.w700,
+                              color: ColorsManager.errorText)),
+                      if (widget.invoice.paidAmount > 0) ...[
+                        SizedBox(height: 4.h),
+                        Text(
+                            '⚠️ تم استلام ${fmt.format(widget.invoice.paidAmount)} $cur'
+                                ' — تأكد من مراجعة الأرصدة',
+                            style: TextStyle(fontSize: 11.sp,
+                                color: Theme.of(context).hintColor)),
+                      ],
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                TextField(
+                  controller: _reasonCtrl,
+                  maxLines:   2,
+                  decoration: InputDecoration(
+                    labelText: 'سبب الإلغاء (اختياري)',
+                    hintText:  'مثال: خطأ في الإدخال',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading
+                  ? null
+                  : () => Navigator.of(context).pop(),
+              child: const Text('تراجع'),
+            ),
+            FilledButton.icon(
+              onPressed: loading
+                  ? null
+                  : () => context.read<SuppliersCubit>().cancelServiceInvoice(
+                invoiceId:  widget.invoice.id,
+                supplierId: widget.supplierId,
+                reason:     _reasonCtrl.text.trim().isEmpty
+                    ? null
+                    : _reasonCtrl.text.trim(),
+              ),
+              icon: loading
+                  ? SizedBox(width: 14.r, height: 14.r,
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+                  : Icon(Icons.check_rounded, size: 16.r),
+              label: Text('تأكيد الإلغاء',
+                  style: TextStyle(fontSize: 13.sp)),
+              style: FilledButton.styleFrom(
+                  backgroundColor: ColorsManager.errorText),
+            ),
+          ],
+        );
+      },
     );
   }
 }

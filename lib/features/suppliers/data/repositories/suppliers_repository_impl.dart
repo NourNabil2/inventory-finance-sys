@@ -174,6 +174,48 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
   }
 
+  // ── 🆕 إلغاء فاتورة خدمات ────────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, void>> cancelServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    String? reason,
+  }) async {
+    try {
+      await _ds.cancelServiceInvoice(
+          invoiceId: invoiceId, supplierId: supplierId, reason: reason);
+      return const Right(null);
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
+  }
+
+  // ── 🆕 تعديل فاتورة خدمات ────────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, void>> editServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  }) async {
+    try {
+      await _ds.editServiceInvoice(
+        invoiceId:       invoiceId,
+        supplierId:      supplierId,
+        discount:        discount,
+        notes:           notes,
+        deletedItemIds:  deletedItemIds,
+        existingUpdates: existingUpdates,
+        newItems:        newItems,
+      );
+      return const Right(null);
+    } on ServerException catch (e) { return Left(ServerFailure(e.message)); }
+  }
+
+
   @override
   Future<Either<Failure, ClearingResult>> executeSupplierClearing({
     required String supplierId,

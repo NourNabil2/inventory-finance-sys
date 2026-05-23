@@ -79,6 +79,24 @@ abstract class SuppliersRemoteDataSource {
     required double amount,
     required String method,
   });
+
+  // 🆕 إلغاء فاتورة خدمات
+  Future<void> cancelServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    String? reason,
+  });
+
+  // 🆕 تعديل فاتورة خدمات (خصم + ملاحظات فقط)
+  Future<void> editServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,6 +350,48 @@ class SuppliersRemoteDataSourceImpl implements SuppliersRemoteDataSource {
         'p_supplier_id': supplierId,
         'p_amount':      amount,
         'p_method':      method,
+      });
+    } catch (e, st) { throw ErrorHandler.handleException(e, st); }
+  }
+
+  // ── 🆕 إلغاء فاتورة خدمات ────────────────────────────────────────────────
+
+  @override
+  Future<void> cancelServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    String? reason,
+  }) async {
+    try {
+      await _supabase.rpc('cancel_service_invoice', params: {
+        'p_invoice_id':  invoiceId,
+        'p_supplier_id': supplierId,
+        if (reason != null) 'p_reason': reason,
+      });
+    } catch (e, st) { throw ErrorHandler.handleException(e, st); }
+  }
+
+  // ── 🆕 تعديل فاتورة خدمات ────────────────────────────────────────────────
+
+  @override
+  Future<void> editServiceInvoice({
+    required String invoiceId,
+    required String supplierId,
+    required double discount,
+    String? notes,
+    required List<String> deletedItemIds,
+    required List<Map<String, dynamic>> existingUpdates,
+    required List<Map<String, dynamic>> newItems,
+  }) async {
+    try {
+      await _supabase.rpc('edit_service_invoice_transaction', params: {
+        'p_invoice_id':       invoiceId,
+        'p_supplier_id':      supplierId,
+        'p_new_discount':     discount,
+        if (notes != null) 'p_notes': notes,
+        'p_deleted_item_ids': deletedItemIds,
+        'p_existing_updates': existingUpdates,
+        'p_new_items':        newItems,
       });
     } catch (e, st) { throw ErrorHandler.handleException(e, st); }
   }
