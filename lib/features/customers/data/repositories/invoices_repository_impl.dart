@@ -16,8 +16,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
   InvoicesRepositoryImpl(this._ds);
 
   @override
-  Future<Either<Failure, List<InvoiceEntity>>> getCustomerInvoices(
-      String customerId) async {
+  Future<Either<Failure, List<InvoiceEntity>>> getCustomerInvoices(String customerId) async {
     try {
       final raw = await _ds.getCustomerInvoices(customerId);
       return Right(raw.map(InvoiceModel.fromJson).toList());
@@ -27,8 +26,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
   }
 
   @override
-  Future<Either<Failure, InvoiceEntity>> getInvoiceDetails(
-      String invoiceId) async {
+  Future<Either<Failure, InvoiceEntity>> getInvoiceDetails(String invoiceId) async {
     try {
       final raw = await _ds.getInvoiceDetails(invoiceId);
       return Right(InvoiceModel.fromJson(raw));
@@ -38,8 +36,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
   }
 
   @override
-  Future<Either<Failure, InvoicePaymentSummary>> getPaymentSummary(
-      String invoiceId) async {
+  Future<Either<Failure, InvoicePaymentSummary>> getPaymentSummary(String invoiceId) async {
     try {
       final raw = await _ds.getInvoicePaymentSummary(invoiceId);
       return Right(InvoicePaymentSummary.fromJson(raw));
@@ -58,42 +55,40 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     try {
       final invoiceId = invoice.id.isEmpty ? const Uuid().v4() : invoice.id;
       final invoiceMap = {
-        'id': invoiceId,
-        'customer_id': invoice.customerId,
-        'total_amount': invoice.totalAmount,
-        'discount': invoice.discount,
-        'net_total': invoice.netTotal,
-        'status': invoice.status == InvoiceStatus.draft ? 'draft' : 'active',
+        'id':             invoiceId,
+        'customer_id':    invoice.customerId,
+        'total_amount':   invoice.totalAmount,
+        'discount':       invoice.discount,
+        'net_total':      invoice.netTotal,
+        'status':         invoice.status == InvoiceStatus.draft ? 'draft' : 'active',
         'invoice_number': invoice.invoiceNumber,
-        if (invoice.jobName != null) 'job_name': invoice.jobName,
+        if (invoice.jobName != null)    'job_name':   invoice.jobName,
         if (invoice.production != null) 'production': invoice.production,
       };
 
       final itemsList = items.map((i) => {
-        'item_id': i.itemId,
-        'qty': i.qty ?? 1,
-        'days': i.days ?? 1,
-        'price_per_day': i.pricePerDay ?? 0.0,
-        'item_discount': i.itemDiscount ?? 0.0,
-        'is_sub_rented': i.isSubRented ?? false,
-        'status': 'out',
-        if (i.supplierId != null) 'supplier_id': i.supplierId,
-        if (i.supplierCost != null) 'supplier_cost': i.supplierCost,
+        'item_id':      i.itemId,
+        'qty':          i.qty,
+        'days':         i.days,
+        'price_per_day':i.pricePerDay,
+        'item_discount':i.itemDiscount,
+        'is_sub_rented':i.isSubRented,
+        'status':       'out',
+        if (i.supplierId != null)    'supplier_id':   i.supplierId,
+        if (i.supplierCost != null)  'supplier_cost': i.supplierCost,
       }).toList();
 
       final id = await _ds.createInvoiceWithPayment(
         invoiceData: invoiceMap,
-        itemsData: itemsList,
-        amountPaid: amountPaid,
-        method: method,
+        itemsData:   itemsList,
+        amountPaid:  amountPaid,
+        method:      method,
       );
       return Right(id);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }
   }
-
-  // ── recordPaymentAndGetSummary — returns fresh summary ───────────────────
 
   @override
   Future<Either<Failure, InvoicePaymentSummary>> recordPaymentAndGetSummary({
@@ -104,16 +99,14 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     try {
       final raw = await _ds.recordPaymentAndGetSummary(
         invoiceId: invoiceId,
-        amount: amount,
-        method: method,
+        amount:    amount,
+        method:    method,
       );
       return Right(InvoicePaymentSummary.fromJson(raw));
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }
   }
-
-  // ── legacy recordPayment wrapper ─────────────────────────────────────────
 
   @override
   Future<Either<Failure, void>> recordPayment({
@@ -123,8 +116,8 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
   }) async {
     final result = await recordPaymentAndGetSummary(
       invoiceId: invoiceId,
-      amount: amount,
-      method: method,
+      amount:    amount,
+      method:    method,
     );
     return result.fold(Left.new, (_) => const Right(null));
   }
@@ -142,17 +135,19 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     String? production,
   }) async {
     try {
+      // تحويل الـ new items لـ JSON
       final newItemsJson = newItems.map((i) => {
         'item_id':       i.itemId,
-        'qty':           i.qty ?? 1,
-        'days':          i.days ?? 1,
-        'price_per_day': i.pricePerDay ?? 0.0,
-        'item_discount': i.itemDiscount ?? 0.0,
-        'is_sub_rented': i.isSubRented ?? false,
+        'qty':           i.qty,
+        'days':          i.days,
+        'price_per_day': i.pricePerDay,
+        'item_discount': i.itemDiscount,
+        'is_sub_rented': i.isSubRented,
         if (i.supplierId != null)   'supplier_id':   i.supplierId,
         if (i.supplierCost != null) 'supplier_cost': i.supplierCost,
       }).toList();
 
+      // تحويل الـ existingUpdates من Map لـ List — هنا بس، مش في الـ datasource
       final existingJson = existingUpdates.entries.map((e) => {
         'id':           e.key,
         'new_days':     e.value['days']         as int,
@@ -164,7 +159,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
       await _ds.editInvoice(
         invoiceId:       invoiceId,
         newItems:        newItemsJson,
-        existingUpdates: existingJson,
+        existingUpdates: existingJson, // ← List جاهزة
         newDiscount:     newDiscount,
         jobName:         jobName,
         production:      production,
@@ -182,10 +177,10 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
       String invoiceId, InvoiceStatus status, String customerId) async {
     try {
       final s = switch (status) {
-        InvoiceStatus.active => 'active',
+        InvoiceStatus.active    => 'active',
         InvoiceStatus.completed => 'completed',
-        InvoiceStatus.canceled => 'canceled',
-        InvoiceStatus.draft => 'draft',
+        InvoiceStatus.canceled  => 'canceled',
+        InvoiceStatus.draft     => 'draft',
       };
       await _ds.updateInvoiceStatus(invoiceId, s);
       return const Right(null);
@@ -194,11 +189,8 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     }
   }
 
-  // ── returnSingleItem — supports partial qty ──────────────────────────────
-
   @override
-  Future<Either<Failure, void>> returnSingleItem(
-      String invoiceItemId, {int? qty}) async {
+  Future<Either<Failure, void>> returnSingleItem(String invoiceItemId, {int? qty}) async {
     try {
       await _ds.returnSingleItem(invoiceItemId, qty: qty);
       return const Right(null);
@@ -227,8 +219,8 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
     try {
       final raw = await _ds.getCustomerInvoicesForExport(
         customerId: customerId,
-        startDate: startDate,
-        endDate: endDate,
+        startDate:  startDate,
+        endDate:    endDate,
       );
       return Right(raw.map(InvoiceModel.fromJson).toList());
     } on ServerException catch (e) {
