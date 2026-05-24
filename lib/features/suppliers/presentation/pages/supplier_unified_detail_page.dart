@@ -13,6 +13,7 @@ import 'package:bungee_manage_sys/features/suppliers/domain/entities/supplier_in
 import 'package:bungee_manage_sys/features/suppliers/presentation/cubit/suppliers_cubit.dart';
 import 'package:bungee_manage_sys/features/suppliers/presentation/pages/create_supplier_invoice_page.dart';
 import 'package:bungee_manage_sys/features/suppliers/presentation/pages/edit_supplier_invoice_page.dart';
+import 'package:bungee_manage_sys/features/suppliers/presentation/pages/edit_service_invoice_page.dart';
 import 'package:bungee_manage_sys/features/suppliers/presentation/widgets/supplier_invoice_widgets.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -435,12 +436,14 @@ ChipStatus _getServiceChipStatus(ServiceInvoiceStatus s) => switch (s) {
   ServiceInvoiceStatus.paid    => ChipStatus.completed,
   ServiceInvoiceStatus.partial => ChipStatus.pending,
   ServiceInvoiceStatus.unpaid  => ChipStatus.reserved,
+  ServiceInvoiceStatus.canceled=> ChipStatus.canceled,
 };
 
 String _getServiceStatusLabel(ServiceInvoiceStatus s) => switch (s) {
   ServiceInvoiceStatus.paid    => 'مدفوعة',
   ServiceInvoiceStatus.partial => 'مدفوعة جزئياً',
   ServiceInvoiceStatus.unpaid  => 'غير مدفوعة',
+  ServiceInvoiceStatus.canceled=> 'ملغاة',
 };
 
 class _ServiceInvoicesList extends StatelessWidget {
@@ -744,32 +747,38 @@ class _ServiceInvoiceDetailShell extends StatelessWidget {
                         Text('تفاصيل فاتورة الخدمات',
                             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15.sp,
                                 color: theme.textTheme.titleSmall?.color)),
-                        Text('#${invoice.id.substring(0, 8).toUpperCase()}',
-                            style: TextStyle(fontSize: 11.sp,
-                                color: ColorsManager.defaultTextSecondary)),
+                        if (invoice.status == ServiceInvoiceStatus.canceled)
+                          Text('ملغية', style: TextStyle(fontSize: 11.sp, color: ColorsManager.errorText,
+                              fontWeight: FontWeight.w600))
+                        else
+                          Text('#${invoice.id.substring(0, 8).toUpperCase()}',
+                              style: TextStyle(fontSize: 11.sp,
+                                  color: ColorsManager.defaultTextSecondary)),
                       ],
                     ),
                   ),
                   // ── أزرار تعديل وإلغاء ──────────────────────────────────────
-                  IconButton(
-                    icon: isEditLoading
-                        ? SizedBox(width: 18.r, height: 18.r,
-                        child: const CircularProgressIndicator(strokeWidth: 2))
-                        : Icon(Icons.edit_outlined, size: 20.r,
-                        color: ColorsManager.primaryColor),
-                    tooltip:  'تعديل الفاتورة',
-                    onPressed: busy ? null : () => _showEditDialog(ctx),
-                  ),
-                  IconButton(
-                    icon: isCancelLoading
-                        ? SizedBox(width: 18.r, height: 18.r,
-                        child: const CircularProgressIndicator(
-                            strokeWidth: 2, color: ColorsManager.errorText))
-                        : Icon(Icons.cancel_outlined, size: 20.r,
-                        color: ColorsManager.errorText),
-                    tooltip:  'إلغاء الفاتورة',
-                    onPressed: busy ? null : () => _showCancelDialog(ctx),
-                  ),
+                  if (invoice.status != ServiceInvoiceStatus.canceled) ...[
+                    IconButton(
+                      icon: isEditLoading
+                          ? SizedBox(width: 18.r, height: 18.r,
+                          child: const CircularProgressIndicator(strokeWidth: 2))
+                          : Icon(Icons.edit_outlined, size: 20.r,
+                          color: ColorsManager.primaryColor),
+                      tooltip:  'تعديل الفاتورة',
+                      onPressed: busy ? null : () => _showEditDialog(ctx),
+                    ),
+                    IconButton(
+                      icon: isCancelLoading
+                          ? SizedBox(width: 18.r, height: 18.r,
+                          child: const CircularProgressIndicator(
+                              strokeWidth: 2, color: ColorsManager.errorText))
+                          : Icon(Icons.cancel_outlined, size: 20.r,
+                          color: ColorsManager.errorText),
+                      tooltip:  'إلغاء الفاتورة',
+                      onPressed: busy ? null : () => _showCancelDialog(ctx),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -940,6 +949,7 @@ class _ServiceInvoiceDetailShell extends StatelessWidget {
                                   _SvcColHdr('الكمية'),
                                   _SvcColHdr('الأيام'),
                                   _SvcColHdr('سعر/يوم'),
+                                  _SvcColHdr('الخصم'),
                                   _SvcColHdr('الإجمالي', end: true),
                                 ]),
                               ),
@@ -984,6 +994,8 @@ class _ServiceInvoiceDetailShell extends StatelessWidget {
                                     _SvcCell('${item.qty}'),
                                     _SvcCell('${item.days}'),
                                     _SvcCell(item.pricePerDay.toStringAsFixed(0)),
+                                    _SvcCell(item.itemDiscount.toStringAsFixed(0),
+                                        color: ColorsManager.warningText),
                                     _SvcCell(item.lineTotal.toStringAsFixed(0),
                                         end: true, bold: true),
                                   ]),
@@ -1015,7 +1027,7 @@ class _ServiceInvoiceDetailShell extends StatelessWidget {
                                             style: TextStyle(fontSize: 12.sp,
                                                 color: ColorsManager.warningText))),
                                     const _SvcCell(''), const _SvcCell(''),
-                                    const _SvcCell(''),
+                                    const _SvcCell(''), const _SvcCell(''),
                                     _SvcCell(
                                         '-$cur ${invoice.discount.toStringAsFixed(0)}',
                                         end: true,
@@ -1088,12 +1100,16 @@ class _ServiceInvoiceDetailShell extends StatelessWidget {
   }
 
   void _showEditDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => BlocProvider.value(
-        value: context.read<SuppliersCubit>(),
-        child: _ServiceInvoiceEditDialog(invoice: invoice, supplierId: supplierId),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: context.read<SuppliersCubit>()),
+            BlocProvider(create: (_) => di.sl<InventoryCubit>()),
+          ],
+          child: EditServiceInvoicePage(invoice: invoice, supplierId: supplierId),
+        ),
       ),
     );
   }
@@ -1165,173 +1181,6 @@ class _SvcCell extends StatelessWidget {
 
 // ── 🆕 Edit dialog ────────────────────────────────────────────────────────────
 
-class _ServiceInvoiceEditDialog extends StatefulWidget {
-  final ServiceInvoiceEntity invoice;
-  final String supplierId;
-  const _ServiceInvoiceEditDialog({required this.invoice, required this.supplierId});
-
-  @override
-  State<_ServiceInvoiceEditDialog> createState() => _ServiceInvoiceEditDialogState();
-}
-
-class _ServiceInvoiceEditDialogState extends State<_ServiceInvoiceEditDialog> {
-  late final TextEditingController _discCtrl;
-  late final TextEditingController _notesCtrl;
-  bool _isPopping = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _discCtrl  = TextEditingController(
-        text: widget.invoice.discount.toStringAsFixed(0));
-    _notesCtrl = TextEditingController(text: widget.invoice.notes ?? '');
-  }
-
-  @override
-  void dispose() {
-    _discCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cur   = 'dashboard.currency'.tr();
-
-    return BlocConsumer<SuppliersCubit, SuppliersState>(
-      listenWhen: (p, c) =>
-      p.serviceInvoiceEditStatus != c.serviceInvoiceEditStatus,
-      listener: (ctx, state) {
-        if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.success) {
-          if (_isPopping || !mounted) return;
-          _isPopping = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            Navigator.of(ctx).pop();
-          });
-        } else if (state.serviceInvoiceEditStatus == ServiceInvoiceEditStatus.failure) {
-          ctx.showError(state.errorMessage ?? 'فشل التعديل');
-        }
-      },
-      builder: (ctx, state) {
-        final loading = state.isServiceInvoiceEditLoading;
-        final disc    = double.tryParse(_discCtrl.text) ?? 0;
-        final net     = (widget.invoice.totalAmount - disc).clamp(0.0, double.infinity);
-
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Row(children: [
-            Icon(Icons.edit_outlined, color: ColorsManager.primaryColor, size: 22.r),
-            SizedBox(width: 8.w),
-            Text('تعديل فاتورة الخدمات',
-                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700)),
-          ]),
-          content: SizedBox(
-            width: 400.w,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: EdgeInsets.all(10.r),
-                  decoration: BoxDecoration(
-                    color: ColorsManager.primaryColor.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.info_outline, size: 14.r,
-                        color: ColorsManager.primaryColor),
-                    SizedBox(width: 8.w),
-                    Expanded(child: Text(
-                      'الإجمالي: $cur ${widget.invoice.totalAmount.toStringAsFixed(0)}'
-                          '   →   صافي بعد الخصم: $cur ${net.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 12.sp,
-                          color: ColorsManager.primaryColor,
-                          fontWeight: FontWeight.w600),
-                    )),
-                  ]),
-                ),
-                SizedBox(height: 14.h),
-                Text('خصم الفاتورة ($cur)',
-                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600,
-                        color: theme.textTheme.titleSmall?.color)),
-                SizedBox(height: 6.h),
-                TextFormField(
-                  controller: _discCtrl,
-                  enabled:    !loading,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    suffixText: cur,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.r)),
-                  ),
-                ),
-                SizedBox(height: 14.h),
-                Text('ملاحظات',
-                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600,
-                        color: theme.textTheme.titleSmall?.color)),
-                SizedBox(height: 6.h),
-                TextFormField(
-                  controller: _notesCtrl,
-                  enabled:    !loading,
-                  maxLines:   2,
-                  decoration: InputDecoration(
-                    hintText: 'ملاحظات (اختياري)',
-                    border:   OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.r)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: loading ? null : () => Navigator.of(context).pop(),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton.icon(
-              onPressed: loading ? null : () {
-                final disc = double.tryParse(_discCtrl.text) ?? 0;
-                if (disc < 0) {
-                  context.showError('الخصم لا يمكن أن يكون سالباً');
-                  return;
-                }
-                final net = widget.invoice.totalAmount - disc;
-                if (net < widget.invoice.paidAmount) {
-                  context.showError(
-                      'الصافي (${net.toStringAsFixed(0)}) أقل من المدفوع '
-                          '(${widget.invoice.paidAmount.toStringAsFixed(0)})');
-                  return;
-                }
-                context.read<SuppliersCubit>().editServiceInvoice(
-                  invoiceId:       widget.invoice.id,
-                  supplierId:      widget.supplierId,
-                  discount:        disc,
-                  notes:           _notesCtrl.text.trim().isEmpty
-                      ? null : _notesCtrl.text.trim(),
-                  deletedItemIds:  const [],
-                  existingUpdates: const [],
-                  newItems:        const [],
-                );
-              },
-              icon: loading
-                  ? SizedBox(width: 14.r, height: 14.r,
-                  child: const CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-                  : Icon(Icons.save_outlined, size: 16.r),
-              label: Text('حفظ التعديلات',
-                  style: TextStyle(fontSize: 13.sp)),
-              style: FilledButton.styleFrom(
-                  backgroundColor: ColorsManager.primaryColor),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
 
 // ── 🆕 Cancel dialog ──────────────────────────────────────────────────────────
 

@@ -45,7 +45,7 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
       // ── 4. أحدث 5 فواتير معتمدة ونشطة (عزل المسودات)
       final recentInvoicesRes = await _supabase
           .from('invoices')
-          .select('id, invoice_number, total_amount, discount, status, created_at, customers(name)')
+          .select('id, invoice_number, total_amount, discount, status, created_at, customers(name), suppliers(name)')
           .neq('status', 'draft')
           .order('created_at', ascending: false)
           .limit(5);

@@ -220,10 +220,12 @@ class SuppliersRemoteDataSourceImpl implements SuppliersRemoteDataSource {
   @override
   Future<List<Map<String, dynamic>>> getSupplierServiceInvoices(String supplierId) async {
     try {
-      final res = await _supabase.rpc(
-        'get_supplier_service_invoices',
-        params: {'p_supplier_id': supplierId},
-      );
+      final res = await _supabase
+          .from('invoices')
+          .select('*, invoice_items(*, items(name, model))')
+          .eq('supplier_id', supplierId)
+          .not('supplier_id', 'is', null)
+          .order('created_at', ascending: false);
       final list = (res as List?) ?? [];
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e, st) { throw ErrorHandler.handleException(e, st); }

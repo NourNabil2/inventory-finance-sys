@@ -6,7 +6,7 @@ import 'service_invoice_item_entity.dart';
 
 export 'service_invoice_item_entity.dart';
 
-enum ServiceInvoiceStatus { unpaid, partial, paid }
+enum ServiceInvoiceStatus { unpaid, partial, paid, canceled }
 
 class ServiceInvoiceEntity extends Equatable {
   final String id;

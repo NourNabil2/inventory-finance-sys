@@ -95,10 +95,12 @@ class DashboardModel extends DashboardEntity {
       final discount = (inv['discount'] as num?)?.toDouble() ?? 0.0;
       final netTotal = totalAmount - discount;
 
-      // جلب اسم العميل (لأننا عاملين Join مع جدول العملاء)
+      // جلب اسم العميل (أو المورد إذا كانت فاتورة خدمات)
       String cName = 'غير معروف';
-      if (inv['customers'] != null) {
+      if (inv['customers'] != null && inv['customers']['name'] != null) {
         cName = inv['customers']['name']?.toString() ?? 'غير معروف';
+      } else if (inv['suppliers'] != null && inv['suppliers']['name'] != null) {
+        cName = inv['suppliers']['name']?.toString() ?? 'غير معروف';
       }
 
       // السيريال (لو فاضي بياخد أول 8 حروف من الآي دي كحماية)

@@ -135,10 +135,24 @@ class _CreateSupplierInvoicePageState
         notes:      _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
     } else {
-      await cubit.createServiceInvoiceForSupplier(
+      final invoiceData = {
+        'total_amount': _netTotal,
+        'discount': _invDiscFlat,
+        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      };
+      
+      final itemsData = _lines.map((l) => {
+        'item_id': l.item?.id,
+        'qty': l.qty,
+        'days': l.days,
+        'price_per_day': l.pricePerDay,
+        'item_discount': l.flatDiscount,
+      }).toList();
+
+      await cubit.createFullServiceInvoiceForSupplier(
         supplierId:  widget.supplier.id,
-        totalAmount: _netTotal,
-        notes:       _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        invoiceData: invoiceData,
+        itemsData:   itemsData,
       );
     }
 

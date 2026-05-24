@@ -374,7 +374,7 @@ class SuppliersCubit extends Cubit<SuppliersState> {
         emit(state.copyWith(clearingStatus: ClearingStatus.success, lastClearingResult: cr));
         await fetchSuppliers();
         if (state.selectedSupplier?.id == supplierId) {
-          final fresh = state.suppliers.firstWhere(
+          final fresh = state.suppliers.cast<SupplierEntity>().firstWhere(
                   (s) => s.id == supplierId, orElse: () => state.selectedSupplier!);
           if (!isClosed) emit(state.copyWith(selectedSupplier: fresh));
         }
@@ -399,7 +399,7 @@ class SuppliersCubit extends Cubit<SuppliersState> {
         await fetchSuppliers();
         // Update selected supplier locally if possible
         if (state.selectedSupplier?.id == supplierId) {
-          final fresh = state.suppliers.firstWhere(
+          final fresh = state.suppliers.cast<SupplierEntity>().firstWhere(
                 (s) => s.id == supplierId,
             orElse: () => state.selectedSupplier!,
           );
@@ -454,7 +454,7 @@ class SuppliersCubit extends Cubit<SuppliersState> {
         emit(state.copyWith(clearingStatus: ClearingStatus.success, lastClearingResult: cr));
         await fetchSuppliers();
         if (state.selectedSupplier?.id == supplierId) {
-          final fresh = state.suppliers.firstWhere(
+          final fresh = state.suppliers.cast<SupplierEntity>().firstWhere(
                   (s) => s.id == supplierId, orElse: () => state.selectedSupplier!);
           if (!isClosed) emit(state.copyWith(selectedSupplier: fresh));
         }

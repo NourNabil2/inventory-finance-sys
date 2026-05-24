@@ -62,6 +62,8 @@ class ServiceInvoiceModel extends ServiceInvoiceEntity {
       mappedStatus = ServiceInvoiceStatus.paid;
     } else if (statusStr == 'partial') {
       mappedStatus = ServiceInvoiceStatus.partial;
+    } else if (statusStr == 'canceled') {
+      mappedStatus = ServiceInvoiceStatus.canceled;
     } else {
       mappedStatus = ServiceInvoiceStatus.unpaid;
     }
