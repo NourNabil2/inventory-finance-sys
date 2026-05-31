@@ -136,7 +136,7 @@ class _CreateSupplierInvoicePageState
       );
     } else {
       final invoiceData = {
-        'total_amount': _netTotal,
+        'total_amount': _subtotal,
         'discount': _invDiscFlat,
         'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       };
