@@ -262,71 +262,72 @@ class _RecentTransactionsState extends State<_RecentTransactions> {
     final hasMore = widget.transactions.length > _displayLimit;
     final displayedTransactions = widget.transactions.take(_displayLimit).toList();
 
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16.w),
-            child: Text(
-              'finance.recent_transactions'.tr(),
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: ColorsManager.defaultText,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 8.h),
+          child: Text(
+            'finance.recent_transactions'.tr(),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
           ),
-          Divider(height: 1, color: theme.dividerColor),
+        ),
+        SizedBox(height: 8.h),
 
-          if (widget.transactions.isEmpty)
-            Padding(
-              padding: EdgeInsets.all(32.r),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.receipt_long_outlined, size: 48.r, color: ColorsManager.defaultTextSecondary),
-                    SizedBox(height: 16.h),
-                    Text(
-                      'finance.no_transactions'.tr(),
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
+        if (widget.transactions.isEmpty)
+          AppCard(
+            padding: EdgeInsets.all(32.r),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.receipt_long_outlined, size: 48.r, color: ColorsManager.defaultTextSecondary),
+                  SizedBox(height: 16.h),
+                  Text(
+                    'finance.no_transactions'.tr(),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
               ),
-            )
-          else ...[
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: displayedTransactions.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: theme.dividerColor),
-              itemBuilder: (context, index) => _TransactionTile(transaction: displayedTransactions[index]),
             ),
+          )
+        else ...[
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: displayedTransactions.length,
+            itemBuilder: (context, index) => Padding(
+              padding: EdgeInsets.only(bottom: 12.h),
+              child: _TransactionTile(transaction: displayedTransactions[index]),
+            ),
+          ),
 
-            if (hasMore) ...[
-              Divider(height: 1, color: theme.dividerColor),
-              InkWell(
-                onTap: () {
+          if (hasMore) ...[
+            SizedBox(height: 8.h),
+            Center(
+              child: TextButton(
+                onPressed: () {
                   setState(() {
                     _displayLimit += 5;
                   });
                 },
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: 14.h),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'common.load_more'.tr(),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: ColorsManager.primaryColor,
-                    ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                ),
+                child: Text(
+                  'common.load_more'.tr(),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: ColorsManager.primaryColor,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-            ],
-          ]
-        ],
-      ),
+            ),
+          ],
+        ]
+      ],
     );
   }
 }
@@ -346,8 +347,20 @@ class _TransactionTile extends StatelessWidget {
     final sign = isIncome ? '+' : '-';
     String subtitleText = '${transaction.methodDisplayName} • ${dateFormat.format(transaction.createdAt)}';
 
-    return Padding(
+    return Container(
       padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(theme.brightness == Brightness.dark ? 0.15 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -355,26 +368,26 @@ class _TransactionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 42.r,
-                height: 42.r,
+                width: 44.r,
+                height: 44.r,
                 decoration: BoxDecoration(
-                    color: amountColor.withOpacity(0.1),
+                    color: amountColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10.r)
                 ),
                 child: Icon(
-                    isIncome ? Icons.arrow_downward : Icons.arrow_upward,
+                    isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
                     color: amountColor,
-                    size: 20.r
+                    size: 22.r
                 ),
               ),
-              SizedBox(width: 12.w),
+              SizedBox(width: 14.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       transaction.categoryDisplayName,
-                      style: theme.textTheme.titleSmall,
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     SizedBox(height: 4.h),
                     if (transaction.customerName != null && transaction.customerName!.isNotEmpty) ...[
@@ -389,18 +402,17 @@ class _TransactionTile extends StatelessWidget {
                     ],
                     Text(
                       subtitleText,
-                      style: theme.textTheme.labelSmall,
+                      style: theme.textTheme.labelSmall?.copyWith(color: ColorsManager.defaultTextSecondary),
                     ),
                   ],
                 ),
               ),
               SizedBox(width: 8.w),
               Text(
-                // 🚨 استخدام الاكستنشن الجديد هنا 🚨
                 '$sign${transaction.amount.toMoney(currency)}',
                 style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w800,
                   fontFamily: AppTextTheme.fontFamily,
                   color: amountColor,
                 ),
@@ -409,29 +421,23 @@ class _TransactionTile extends StatelessWidget {
           ),
 
           if (transaction.notes != null && transaction.notes!.isNotEmpty) ...[
-            SizedBox(height: 12.h),
+            SizedBox(height: 14.h),
             Container(
               width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+              padding: EdgeInsets.all(10.r),
               decoration: BoxDecoration(
                 color: theme.brightness == Brightness.dark
-                    ? Colors.white.withOpacity(0.03)
-                    : ColorsManager.defaultTextSecondary.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(6.r),
-                border: Border(
-                  right: BorderSide(
-                    color: amountColor.withOpacity(0.5),
-                    width: 3,
-                  ),
-                ),
+                    ? const Color(0xFF161622)
+                    : const Color(0xFFF1F3F6),
+                borderRadius: BorderRadius.circular(8.r),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                      Icons.notes_rounded,
+                      Icons.format_quote_rounded,
                       size: 16.r,
-                      color: ColorsManager.defaultTextSecondary.withOpacity(0.7)
+                      color: ColorsManager.defaultTextSecondary.withOpacity(0.6)
                   ),
                   SizedBox(width: 8.w),
                   Expanded(

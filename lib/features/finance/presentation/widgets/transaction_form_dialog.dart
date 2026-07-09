@@ -41,6 +41,7 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
   TransactionCategory _category = TransactionCategory.generalExpense;
   CustomerEntity?     _selectedCustomer;
   bool                _isSubmitting = false;
+  DateTime?           _selectedDate;
 
   // ── Computed helpers ───────────────────────────────────────────────────────
 
@@ -112,12 +113,44 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
         category:    _category,
         referenceId: null,
         notes:       _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        createdAt:   _selectedDate,
       );
     }
 
     if (mounted) {
       setState(() => _isSubmitting = false);
       Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      locale: const Locale('en', 'GB'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).brightness == Brightness.dark
+                ? const ColorScheme.dark(
+                    primary: ColorsManager.primaryColor,
+                    onPrimary: Colors.white,
+                    surface: ColorsManager.darkColor,
+                    onSurface: Colors.white,
+                  )
+                : const ColorScheme.light(
+                    primary: ColorsManager.primaryColor,
+                    onPrimary: Colors.white,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
     }
   }
 
@@ -158,15 +191,37 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
                 SizedBox(height: 24.h),
 
                 // ── Type selector ────────────────────────────────────────────
-                _buildTypeSelector(),
-                SizedBox(height: 16.h),
+                _buildSegmentedControl<TransactionType>(
+                  value: _type,
+                  items: const [TransactionType.income, TransactionType.expense],
+                  labelBuilder: (t) => t == TransactionType.income ? 'finance.income'.tr() : 'finance.expense'.tr(),
+                  iconBuilder: (t) => t == TransactionType.income ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                  colorBuilder: (t) => t == TransactionType.income ? ColorsManager.successFill : ColorsManager.errorFill,
+                  onChanged: (t) {
+                    setState(() {
+                      _type = t;
+                      _category = t == TransactionType.income ? _incomeCategories.first : _expenseCategories.first;
+                      _selectedCustomer = null;
+                    });
+                  },
+                ),
+                SizedBox(height: 20.h),
 
-                // ── Amount ───────────────────────────────────────────────────
-                _buildAmountField(),
-                SizedBox(height: 16.h),
-
-                // ── Method (safe / bank) — always shown ──────────────────────
-                _buildMethodSelector(),
+                // ── Amount & Method (Row) ────────────────────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: _buildAmountField(),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      flex: 2,
+                      child: _buildMethodDropdown(),
+                    ),
+                  ],
+                ),
                 SizedBox(height: 16.h),
 
                 // ── Category ─────────────────────────────────────────────────
@@ -177,15 +232,16 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
                 if (_needsCustomer) ...[
                   _buildCustomerSelector(),
                   SizedBox(height: 8.h),
-                  // Wallet balance hint
                   if (_selectedCustomer != null)
                     _WalletBadge(customer: _selectedCustomer!),
                   SizedBox(height: 16.h),
                 ],
 
-                // ── Notes ────────────────────────────────────────────────────
+                // ── Date & Notes ─────────────────────────────────────────────
+                _buildDateSelector(),
+                SizedBox(height: 16.h),
                 _buildNotesField(),
-                SizedBox(height: 24.h),
+                SizedBox(height: 28.h),
 
                 // ── Submit ───────────────────────────────────────────────────
                 SizedBox(
@@ -194,9 +250,7 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
                   child: ElevatedButton(
                     onPressed: _isSubmitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _type == TransactionType.income
-                          ? ColorsManager.successFill
-                          : ColorsManager.errorFill,
+                      backgroundColor: ColorsManager.primaryColor,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -205,20 +259,18 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
                     ),
                     child: _isSubmitting
                         ? SizedBox(
-                      width:  20.r,
-                      height: 20.r,
-                      child: const CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
+                            width:  20.r,
+                            height: 20.r,
+                            child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
                         : Text(
-                      _isWalletDeposit
-                          ? 'إيداع في رصيد العميل'
-                          : _type == TransactionType.income
-                          ? 'finance.record_income'.tr()
-                          : 'finance.record_expense'.tr(),
-                      style: TextStyle(
-                          fontSize: 16.sp, fontWeight: FontWeight.w600),
-                    ),
+                            _isWalletDeposit
+                                ? 'إيداع في رصيد العميل'
+                                : _type == TransactionType.income
+                                    ? 'finance.record_income'.tr()
+                                    : 'finance.record_expense'.tr(),
+                            style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700),
+                          ),
                   ),
                 ),
               ],
@@ -231,50 +283,95 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
 
   // ── Builders ───────────────────────────────────────────────────────────────
 
-  Widget _buildTypeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'finance.transaction_type'.tr(),
-          style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w600,
-              color: ColorsManager.defaultText),
-        ),
-        SizedBox(height: 8.h),
-        Row(
-          children: [
-            Expanded(
-              child: _TypeButton(
-                label: 'finance.income'.tr(),
-                icon:  Icons.arrow_downward,
-                color: ColorsManager.successFill,
-                isSelected: _type == TransactionType.income,
-                onTap: () => setState(() {
-                  _type             = TransactionType.income;
-                  _category         = _incomeCategories.first;
-                  _selectedCustomer = null;
-                }),
+  Widget _buildSegmentedControl<T>({
+    required T value,
+    required List<T> items,
+    required String Function(T) labelBuilder,
+    required IconData Function(T) iconBuilder,
+    required Color Function(T) colorBuilder,
+    required void Function(T) onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      height: 46.h,
+      padding: EdgeInsets.all(4.r),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161622) : const Color(0xFFF1F3F6),
+        borderRadius: BorderRadius.circular(10.r),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: items.map((item) {
+          final isSelected = value == item;
+          final color = colorBuilder(item);
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(item),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF2C2C3E) : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8.r),
+                  border: isSelected && isDark ? Border.all(color: Colors.white12, width: 1) : null,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      iconBuilder(item),
+                      size: 16.r,
+                      color: isSelected ? color : ColorsManager.defaultTextSecondary,
+                    ),
+                    SizedBox(width: 8.w),
+                    Text(
+                      labelBuilder(item),
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? color : ColorsManager.defaultTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: _TypeButton(
-                label: 'finance.expense'.tr(),
-                icon:  Icons.arrow_upward,
-                color: ColorsManager.errorFill,
-                isSelected: _type == TransactionType.expense,
-                onTap: () => setState(() {
-                  _type             = TransactionType.expense;
-                  _category         = _expenseCategories.first;
-                  _selectedCustomer = null;
-                }),
-              ),
-            ),
-          ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildMethodDropdown() {
+    return DropdownButtonFormField<PaymentMethod>(
+      value: _method,
+      decoration: InputDecoration(
+        labelText: 'الجهة',
+        prefixIcon: Icon(
+          _method == PaymentMethod.cash ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined,
+          size: 20.r,
+          color: ColorsManager.primaryColor,
         ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+      ),
+      items: [
+        DropdownMenuItem(value: PaymentMethod.cash, child: Text('finance.cash'.tr(), style: TextStyle(fontSize: 13.sp))),
+        DropdownMenuItem(value: PaymentMethod.bank, child: Text('finance.bank'.tr(), style: TextStyle(fontSize: 13.sp))),
       ],
+      onChanged: (v) {
+        if (v != null) setState(() => _method = v);
+      },
     );
   }
 
@@ -292,43 +389,6 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
       return null;
     },
   );
-
-  Widget _buildMethodSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'finance.payment_method'.tr(),
-          style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w600,
-              color: ColorsManager.defaultText),
-        ),
-        SizedBox(height: 8.h),
-        Row(
-          children: [
-            Expanded(
-              child: _MethodButton(
-                label:      'finance.cash'.tr(),
-                icon:       Icons.account_balance_wallet_outlined,
-                isSelected: _method == PaymentMethod.cash,
-                onTap:      () => setState(() => _method = PaymentMethod.cash),
-              ),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: _MethodButton(
-                label:      'finance.bank'.tr(),
-                icon:       Icons.account_balance_outlined,
-                isSelected: _method == PaymentMethod.bank,
-                onTap:      () => setState(() => _method = PaymentMethod.bank),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
   Widget _buildCategorySelector() {
     // Guard: keep _category valid when type switches
@@ -381,6 +441,55 @@ class _TransactionFormDialogState extends State<TransactionFormDialog> {
           onChanged: (v) => setState(() => _selectedCustomer = v),
         );
       },
+    );
+  }
+
+  Widget _buildDateSelector() {
+    final hasDate = _selectedDate != null;
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return TextFormField(
+      key: ValueKey(_selectedDate),
+      initialValue: hasDate
+          ? 'تاريخ مخصص: ${DateFormat('yyyy/MM/dd').format(_selectedDate!)}'
+          : '',
+      readOnly: true,
+      onTap: _pickDate,
+      style: TextStyle(
+        fontSize: 14.sp,
+        color: hasDate ? ColorsManager.primaryColor : ColorsManager.defaultText,
+        fontWeight: hasDate ? FontWeight.w600 : FontWeight.normal,
+      ),
+      decoration: InputDecoration(
+        labelText: 'تاريخ العملية',
+        hintText: 'الآن (تلقائي)',
+        hintStyle: TextStyle(
+          color: isDark ? Colors.white30 : Colors.black38,
+          fontSize: 13.sp,
+        ),
+        prefixIcon: Icon(
+          Icons.edit_calendar_outlined,
+          color: hasDate ? ColorsManager.primaryColor : ColorsManager.defaultTextSecondary.withOpacity(0.5),
+        ),
+        suffixIcon: hasDate
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => setState(() => _selectedDate = null),
+                color: ColorsManager.primaryColor,
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+        enabledBorder: hasDate
+            ? OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8.r),
+                borderSide: BorderSide(color: ColorsManager.primaryColor, width: 1.5),
+              )
+            : null,
+        filled: hasDate,
+        fillColor: hasDate ? ColorsManager.primaryColor.withOpacity(0.06) : null,
+      ),
     );
   }
 
@@ -441,112 +550,4 @@ class _WalletBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── _TypeButton ────────────────────────────────────────────────────────────────
-
-class _TypeButton extends StatelessWidget {
-  final String   label;
-  final IconData icon;
-  final Color    color;
-  final bool     isSelected;
-  final VoidCallback onTap;
-
-  const _TypeButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: EdgeInsets.symmetric(vertical: 16.h),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? color.withOpacity(0.1)
-            : ColorsManager.backgroundSurface,
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(
-          color: isSelected ? color : ColorsManager.inputBorder,
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(icon,
-              color: isSelected ? color : ColorsManager.defaultTextSecondary),
-          SizedBox(height: 8.h),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize:   14.sp,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color:      isSelected ? color : ColorsManager.defaultTextSecondary,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-// ── _MethodButton ──────────────────────────────────────────────────────────────
-
-class _MethodButton extends StatelessWidget {
-  final String   label;
-  final IconData icon;
-  final bool     isSelected;
-  final VoidCallback onTap;
-
-  const _MethodButton({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: EdgeInsets.symmetric(vertical: 12.h),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? ColorsManager.primaryColor.withOpacity(0.1)
-            : ColorsManager.backgroundSurface,
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(
-          color: isSelected
-              ? ColorsManager.primaryColor
-              : ColorsManager.inputBorder,
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon,
-              size: 18.r,
-              color: isSelected
-                  ? ColorsManager.primaryColor
-                  : ColorsManager.defaultTextSecondary),
-          SizedBox(width: 8.w),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize:   14.sp,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected
-                  ? ColorsManager.primaryColor
-                  : ColorsManager.defaultTextSecondary,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }

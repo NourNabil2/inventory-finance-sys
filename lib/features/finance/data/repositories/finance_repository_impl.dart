@@ -78,6 +78,7 @@ class FinanceRepositoryImpl implements FinanceRepository {
     required TransactionCategory category,
     String? referenceId,
     String? notes,
+    DateTime? createdAt,
   }) async {
     try {
       final id = await _remoteDataSource.createTransaction(
@@ -87,6 +88,7 @@ class FinanceRepositoryImpl implements FinanceRepository {
         category:    category.toDbValue,
         referenceId: referenceId,
         notes:       notes,
+        createdAt:   createdAt,
       );
       return Right(id);
     } catch (e) {

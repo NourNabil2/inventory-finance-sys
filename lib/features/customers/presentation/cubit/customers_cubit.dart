@@ -162,7 +162,11 @@ class CustomersCubit extends Cubit<CustomersState> {
 
   // ── Export All Customers to Excel ───────────────────────────────────────
 
-  Future<void> exportCustomersToExcel({DateTime? startDate, DateTime? endDate}) async {
+  Future<bool> exportCustomersToExcel({
+    DateTime? startDate,
+    DateTime? endDate,
+    bool detailed = false,
+  }) async {
     try {
       // 1. جلب البيانات
       final supabase = Supabase.instance.client;
@@ -183,7 +187,23 @@ class CustomersCubit extends Cubit<CustomersState> {
             errorMessage: 'لا يوجد حركات مالية أو فواتير للعملاء في هذه الفترة للتصدير',
           ));
         }
-        return;
+        return false;
+      }
+
+      // ── إصلاح مشكلة صفر المدفوعات (استخدام بيانات التطبيق لكل الوقت) ──
+      final isAllTime = startDate != null && startDate.year == 2000;
+      for (var i = 0; i < rawData.length; i++) {
+        final r = rawData[i] as Map<String, dynamic>;
+        final name = r['customer_name']?.toString() ?? '';
+        final customer = state.customers.where((c) => c.name == name).firstOrNull;
+        
+        if (customer != null && isAllTime) {
+          r['period_paid'] = customer.totalPaid;
+          r['period_invoiced'] = customer.totalInvoiced;
+          r['period_debt'] = customer.totalDebt;
+          r['current_total_debt'] = customer.totalDebt;
+          r['wallet_balance'] = customer.walletBalance;
+        }
       }
 
       // ── تجهيز نص الفترة ──────────────────────────────────────────────────
@@ -234,6 +254,7 @@ class CustomersCubit extends Cubit<CustomersState> {
         sumTotalDebt: sumTotalDebt,
         sumWallet: sumWallet,
         rawData: rawData,
+        detailed: detailed,
       );
 
       // ════════════════════════════════════════════════════════════════════════
@@ -270,7 +291,9 @@ class CustomersCubit extends Cubit<CustomersState> {
           ext: 'xlsx',
           mimeType: MimeType.microsoftExcel,
         );
+        return true;
       }
+      return false;
     } catch (e) {
       if (!isClosed) {
         emit(state.copyWith(
@@ -278,6 +301,7 @@ class CustomersCubit extends Cubit<CustomersState> {
           errorMessage: 'حدث خطأ أثناء تصدير الملف: $e',
         ));
       }
+      return false;
     }
   }
 
@@ -295,6 +319,7 @@ class CustomersCubit extends Cubit<CustomersState> {
     required double sumTotalDebt,
     required double sumWallet,
     required List<dynamic> rawData,
+    required bool detailed,
   }) {
     int row = 0;
 
@@ -359,7 +384,7 @@ class CustomersCubit extends Cubit<CustomersState> {
     row += 2;
 
     // ── [5] Top 5 debtors ───────────────────────────────────────────────────
-    _sectionHeader(sheet, row, 'أعلى 5 عملاء مديونية', 4);
+    _sectionHeader(sheet, row, detailed ? 'بيانات مديونية جميع العملاء' : 'أعلى 5 عملاء مديونية', 4);
     row++;
 
     final topDebtHeaders = ['#', 'اسم العميل', 'رقم الهاتف', 'المديونية الكلية'];
@@ -376,7 +401,8 @@ class CustomersCubit extends Cubit<CustomersState> {
             .compareTo(((a as Map)['current_total_debt'] as num)));
 
     int rank = 1;
-    for (final item in sorted.take(5)) {
+    final debtorsList = detailed ? sorted : sorted.take(5);
+    for (final item in debtorsList) {
       final r = item as Map<String, dynamic>;
       final debt = (r['current_total_debt'] as num).toDouble();
       final rowData = [
@@ -403,7 +429,7 @@ class CustomersCubit extends Cubit<CustomersState> {
     row++;
 
     // ── [6] Top 5 payers ────────────────────────────────────────────────────
-    _sectionHeader(sheet, row, 'أعلى 5 عملاء دفعاً في الفترة', 4);
+    _sectionHeader(sheet, row, detailed ? 'بيانات مدفوعات جميع العملاء' : 'أعلى 5 عملاء دفعاً في الفترة', 4);
     row++;
 
     final topPayHeaders = ['#', 'اسم العميل', 'رقم الهاتف', 'إجمالي المدفوعات'];
@@ -420,7 +446,8 @@ class CustomersCubit extends Cubit<CustomersState> {
             .compareTo(((a as Map)['period_paid'] as num)));
 
     rank = 1;
-    for (final item in sortedPay.take(5)) {
+    final payersList = detailed ? sortedPay : sortedPay.take(5);
+    for (final item in payersList) {
       final r = item as Map<String, dynamic>;
       final paid = (r['period_paid'] as num).toDouble();
       final rowData = [

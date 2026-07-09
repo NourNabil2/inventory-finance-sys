@@ -60,6 +60,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     required TransactionCategory category,
     String? referenceId,
     String? notes,
+    DateTime? createdAt,
   }) async {
     emit(FinanceProcessing());
 
@@ -86,6 +87,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       category: category,
       referenceId: referenceId,
       notes: notes,
+      createdAt: createdAt,
     );
 
     result.fold(

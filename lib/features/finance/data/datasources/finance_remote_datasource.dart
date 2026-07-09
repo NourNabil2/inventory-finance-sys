@@ -10,7 +10,7 @@ abstract class FinanceRemoteDataSource {
   Future<Map<String, dynamic>> getFinancialSummary();
   Future<String> createTransaction({
     required double amount, required String type, required String method, required String category,
-    String? referenceId, String? customerId, String? notes,
+    String? referenceId, String? customerId, String? notes, DateTime? createdAt,
   });
   Future<void> depositToWallet({
     required String customerId, required double amount, required String method, String? notes,
@@ -109,14 +109,14 @@ class FinanceRemoteDataSourceImpl implements FinanceRemoteDataSource {
   @override
   Future<String> createTransaction({
     required double amount, required String type, required String method, required String category,
-    String? referenceId, String? customerId, String? notes,
+    String? referenceId, String? customerId, String? notes, DateTime? createdAt,
   }) async {
     try {
       final response = await _supabase.from('financial_transactions').insert({
         'amount': amount, 'type': type, 'method': method, 'category': category,
         'reference_id': referenceId, 'customer_id': customerId,
         'created_by': _supabase.auth.currentUser?.id, 'notes': notes,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
       }).select('id').single();
 
       // 🚨 بعد أي حركة كاش حرة، بنعمل تحديث مالي فوري لحساب العميل لضمان المزامنة

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
+import 'package:bungee_manage_sys/core/widgets/custom_snack_bar.dart';
 
 enum CustomersExportPeriod { allTime, today, thisWeek, thisMonth, custom }
 
@@ -17,20 +18,21 @@ class ExportCustomersDialog extends StatefulWidget {
 class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
   CustomersExportPeriod _selectedPeriod = CustomersExportPeriod.allTime;
   DateTimeRange? _customDateRange;
+  bool _exportDetailed = false;
+  bool _isExporting = false;
 
   Future<void> _pickDateRange() async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final picked = await showDateRangePicker(
+    final start = await showDatePicker(
       context: context,
+      initialDate: _customDateRange?.start ?? DateTime.now().subtract(const Duration(days: 7)),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      initialDateRange: _customDateRange ??
-          DateTimeRange(
-            start: DateTime.now().subtract(const Duration(days: 7)),
-            end: DateTime.now(),
-          ),
+      initialDatePickerMode: DatePickerMode.year,
+      locale: const Locale('en', 'GB'),
+      helpText: 'تاريخ البداية (Start Date)',
       builder: (context, child) => Theme(
         data: theme.copyWith(
           colorScheme: isDark
@@ -49,21 +51,51 @@ class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
       ),
     );
 
-    if (picked != null) {
+    if (start == null) return;
+
+    final end = await showDatePicker(
+      context: context,
+      initialDate: _customDateRange?.end ?? DateTime.now(),
+      firstDate: start,
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      locale: const Locale('en', 'GB'),
+      helpText: 'تاريخ النهاية (End Date)',
+      builder: (context, child) => Theme(
+        data: theme.copyWith(
+          colorScheme: isDark
+              ? const ColorScheme.dark(
+            primary: ColorsManager.primaryColor,
+            onPrimary: Colors.white,
+            surface: ColorsManager.darkColor,
+            onSurface: Colors.white,
+          )
+              : const ColorScheme.light(
+            primary: ColorsManager.primaryColor,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (end != null) {
       setState(() {
-        _customDateRange = picked;
+        _customDateRange = DateTimeRange(start: start, end: end);
         _selectedPeriod = CustomersExportPeriod.custom;
       });
     }
   }
 
-  void _handleExport() {
+  void _handleExport() async {
     final now = DateTime.now();
     DateTime? startDate;
     DateTime? endDate;
 
     switch (_selectedPeriod) {
       case CustomersExportPeriod.allTime:
+        startDate = DateTime(2000, 1, 1);
+        endDate = DateTime(2100, 12, 31, 23, 59, 59, 999);
         break;
       case CustomersExportPeriod.today:
         startDate = DateTime(now.year, now.month, now.day);
@@ -84,13 +116,23 @@ class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
         break;
     }
 
-    Navigator.of(context).pop();
+    setState(() => _isExporting = true);
 
     // استدعاء الـ Cubit — هو اللي هيجيب الـ customers ويبعتهم لـ CustomersExcelExport
-    context.read<CustomersCubit>().exportCustomersToExcel(
+    final success = await context.read<CustomersCubit>().exportCustomersToExcel(
       startDate: startDate,
       endDate: endDate,
+      detailed: _exportDetailed,
     );
+
+    if (!mounted) return;
+
+    if (success) {
+      context.showSuccess('تم تصدير تقرير العملاء بنجاح ✓');
+    }
+
+    setState(() => _isExporting = false);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -294,6 +336,69 @@ class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
                 ),
               ),
 
+              SizedBox(height: 16.h),
+
+              // ─── Detailed Export Switch ──────────────────────────────────
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: _exportDetailed
+                      ? ColorsManager.primaryColor.withOpacity(0.05)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8.r),
+                  border: Border.all(
+                    color: _exportDetailed
+                        ? ColorsManager.primaryColor
+                        : theme.dividerColor,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.list_alt_rounded,
+                      size: 20.r,
+                      color: _exportDetailed
+                          ? ColorsManager.primaryColor
+                          : theme.iconTheme.color?.withOpacity(0.6),
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'تصدير مفصل لجميع العملاء',
+                            style: TextStyle(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w600,
+                              color: _exportDetailed
+                                  ? ColorsManager.primaryColor
+                                  : theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          Text(
+                            'إلغاء حصر (أعلى 5) وعرض الكل في ورقة الملخص',
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _exportDetailed,
+                      activeColor: ColorsManager.primaryColor,
+                      onChanged: (val) {
+                        setState(() {
+                          _exportDetailed = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
               SizedBox(height: 24.h),
 
               // ─── Export button ────────────────────────────────────────────
@@ -301,8 +406,8 @@ class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
                 width: double.infinity,
                 height: 46.h,
                 child: ElevatedButton.icon(
-                  onPressed: (_selectedPeriod == CustomersExportPeriod.custom &&
-                      _customDateRange == null)
+                  onPressed: ((_selectedPeriod == CustomersExportPeriod.custom &&
+                      _customDateRange == null) || _isExporting)
                       ? null
                       : _handleExport,
                   style: ElevatedButton.styleFrom(
@@ -314,9 +419,18 @@ class _ExportCustomersDialogState extends State<ExportCustomersDialog> {
                     disabledBackgroundColor:
                     ColorsManager.successFill.withOpacity(0.35),
                   ),
-                  icon: Icon(Icons.file_download_outlined, size: 18.r),
+                  icon: _isExporting
+                      ? SizedBox(
+                          width: 18.r,
+                          height: 18.r,
+                          child: const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(Icons.file_download_outlined, size: 18.r),
                   label: Text(
-                    'تصدير Excel',
+                    _isExporting ? 'جاري التصدير...' : 'تصدير Excel',
                     style: TextStyle(
                         fontSize: 14.sp, fontWeight: FontWeight.w600),
                   ),

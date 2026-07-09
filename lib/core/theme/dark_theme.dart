@@ -88,7 +88,7 @@ class DarkTheme {
     ),
 
     // Card Theme
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       color: ColorsManager.secondaryDarkColor,
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.5),

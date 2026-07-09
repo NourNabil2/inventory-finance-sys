@@ -22,6 +22,7 @@ abstract class FinanceRepository {
     required TransactionCategory category,
     String? referenceId,
     String? notes,
+    DateTime? createdAt,
   });
 
   /// Deposits cash into the safe/bank AND credits the customer's wallet.
