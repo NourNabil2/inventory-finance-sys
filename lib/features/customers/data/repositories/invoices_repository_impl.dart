@@ -7,6 +7,7 @@ import 'package:bungee_manage_sys/features/customers/data/models/invoice_model.d
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_item_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_payment_summary.dart';
+import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_template_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/repositories/invoices_repository.dart';
 import 'package:dartz/dartz.dart';
 import 'package:uuid/uuid.dart';
@@ -74,6 +75,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         'item_discount':i.itemDiscount,
         'is_sub_rented':i.isSubRented,
         'status':       'out',
+        'sort_order':   i.sortOrder,
         if (i.supplierId != null)    'supplier_id':   i.supplierId,
         if (i.supplierCost != null)  'supplier_cost': i.supplierCost,
       }).toList();
@@ -143,6 +145,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         'price_per_day': i.pricePerDay,
         'item_discount': i.itemDiscount,
         'is_sub_rented': i.isSubRented,
+        'sort_order':    i.sortOrder,
         if (i.supplierId != null)   'supplier_id':   i.supplierId,
         if (i.supplierCost != null) 'supplier_cost': i.supplierCost,
       }).toList();
@@ -154,6 +157,7 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         'qty':          e.value['qty']          as int,
         'price_per_day':e.value['pricePerDay']  as double,
         'item_discount':e.value['flatDiscount'] as double,
+        'sort_order':   e.value['sort_order']   as int?,
       }).toList();
 
       await _ds.editInvoice(
@@ -223,6 +227,38 @@ class InvoicesRepositoryImpl implements InvoicesRepository {
         endDate:    endDate,
       );
       return Right(raw.map(InvoiceModel.fromJson).toList());
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<InvoiceTemplateEntity>>> getInvoiceTemplates() async {
+    try {
+      final raw = await _ds.getInvoiceTemplates();
+      final templates = raw.map(InvoiceTemplateEntity.fromJson).toList();
+      return Right(templates);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> saveInvoiceTemplate({required String name, required List<TemplateItemModel> items}) async {
+    try {
+      final itemsMapList = items.map((e) => e.toJson()).toList();
+      await _ds.saveInvoiceTemplate(name: name, items: itemsMapList);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteInvoiceTemplate(String id) async {
+    try {
+      await _ds.deleteInvoiceTemplate(id);
+      return const Right(null);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     }

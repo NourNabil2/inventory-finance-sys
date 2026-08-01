@@ -55,12 +55,14 @@ class SuppliersRepositoryImpl implements SuppliersRepository {
     required List<SupplierInvoiceItemEntity> items,
     double discount = 0,    // 🆕
     String? notes,
+    DateTime? createdAt,
   }) async {
     try {
       final invoiceData = {
         'supplier_id': supplierId,
         'discount':    discount,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (createdAt != null) 'created_at': createdAt.toIso8601String(),
       };
       // 🚨 FIX #1: تمرير itemDiscount من Entity إلى Model
       final itemsData = items

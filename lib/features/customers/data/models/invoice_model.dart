@@ -33,9 +33,9 @@ class InvoiceModel extends InvoiceEntity {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'].toString())
           : DateTime.now(),
-      items: rawItems
+      items: (rawItems
           .map((i) => InvoiceItemModel.fromJson(i as Map<String, dynamic>))
-          .toList(),
+          .toList())..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
       jobName: json['job_name']?.toString(),
       production: json['production']?.toString(),
     );

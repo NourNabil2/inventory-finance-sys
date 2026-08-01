@@ -3,6 +3,7 @@
 import 'package:bungee_manage_sys/core/errors/failures.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_item_entity.dart';
+import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_template_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_payment_summary.dart';
 import 'package:dartz/dartz.dart';
 
@@ -19,6 +20,10 @@ abstract class InvoicesRepository {
   );
 
   Future<Either<Failure, InvoicePaymentSummary>> getPaymentSummary(String invoiceId);
+
+  Future<Either<Failure, List<InvoiceTemplateEntity>>> getInvoiceTemplates();
+  Future<Either<Failure, void>> saveInvoiceTemplate({required String name, required List<TemplateItemModel> items});
+  Future<Either<Failure, void>> deleteInvoiceTemplate(String id);
 
   /// ==========================================================================
   /// CREATE INVOICE WITH PAYMENT

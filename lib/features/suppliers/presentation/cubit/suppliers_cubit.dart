@@ -115,10 +115,11 @@ class SuppliersCubit extends Cubit<SuppliersState> {
     required List<SupplierInvoiceItemEntity> items,
     double discount = 0,
     String? notes,
+    DateTime? createdAt,
   }) async {
-    emit(state.copyWith(status: SuppliersStatus.loading));
+    emit(state.copyWith(status: SuppliersStatus.loading, clearError: true));
     final result = await _repository.createSupplierInvoice(
-        supplierId: supplierId, items: items, discount: discount, notes: notes);
+        supplierId: supplierId, items: items, discount: discount, notes: notes, createdAt: createdAt);
     if (isClosed) return;
     result.fold(
           (f) => emit(state.copyWith(status: SuppliersStatus.failure, errorMessage: f.message)),

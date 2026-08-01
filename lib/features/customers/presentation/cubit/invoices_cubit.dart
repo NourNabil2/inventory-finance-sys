@@ -12,6 +12,7 @@ import 'package:equatable/equatable.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_item_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_payment_summary.dart';
+import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_template_entity.dart';
 import 'package:bungee_manage_sys/features/customers/domain/repositories/invoices_repository.dart';
 import 'package:excel/excel.dart';
 import 'package:file_saver/file_saver.dart';
@@ -168,7 +169,43 @@ class InvoicesCubit extends Cubit<InvoicesState> {
     );
   }
 
-  // ── Edit invoice ─────────────────────────────────────────────────────────
+  // ── Templates ────────────────────────────────────────────────────────────
+
+  Future<List<InvoiceTemplateEntity>> getInvoiceTemplates() async {
+    final result = await _repository.getInvoiceTemplates();
+    return result.fold(
+      (f) {
+        emit(InvoicesError(f.message));
+        return [];
+      },
+      (list) => list,
+    );
+  }
+
+  Future<void> saveInvoiceTemplate(String name, List<TemplateItemModel> items) async {
+    emit(InvoicesLoading());
+    final result = await _repository.saveInvoiceTemplate(name: name, items: items);
+    result.fold(
+      (f) => emit(InvoicesError(f.message)),
+      (_) {
+        if (_currentInvoices.isNotEmpty) {
+          emit(InvoicesLoaded(invoices: _currentInvoices));
+        } else {
+          emit(InvoicesInitial());
+        }
+      },
+    );
+  }
+
+  Future<void> deleteInvoiceTemplate(String id) async {
+    final result = await _repository.deleteInvoiceTemplate(id);
+    result.fold(
+      (f) => emit(InvoicesError(f.message)),
+      (_) {}, // do nothing on success, UI will reload
+    );
+  }
+
+  // ── Details ──────────────────────────────────────────────────────────────
 
   Future<void> editInvoice({
     required String invoiceId,

@@ -12,6 +12,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart'; // 🚨 ضروري توليد ID للبنود
 
 // ── Invoice direction ──────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ class _CreateSupplierInvoicePageState
   final _invDiscCtrl = TextEditingController(text: '0');
   final List<_LineState> _lines = [];
   bool _submitting = false;
+  DateTime _invoiceDate = DateTime.now();
 
   @override
   void initState() {
@@ -106,6 +108,31 @@ class _CreateSupplierInvoicePageState
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
+  
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _invoiceDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: ColorsManager.primaryColor,
+              onPrimary: Colors.white,
+              surface: Theme.of(context).scaffoldBackgroundColor,
+              onSurface: Theme.of(context).textTheme.bodyMedium!.color!,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _invoiceDate = picked);
+    }
+  }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -133,12 +160,14 @@ class _CreateSupplierInvoicePageState
         items:      items,
         discount:   _invDiscFlat,
         notes:      _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        createdAt:  _invoiceDate,
       );
     } else {
       final invoiceData = {
         'total_amount': _subtotal,
         'discount': _invDiscFlat,
         'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'created_at': _invoiceDate.toIso8601String(),
       };
       
       final itemsData = _lines.map((l) => {
@@ -188,6 +217,11 @@ class _CreateSupplierInvoicePageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _InvoiceDateRow(
+                      date: _invoiceDate,
+                      onTap: _pickDate,
+                    ),
+                    SizedBox(height: 16.h),
                     _SupplierBadge(supplier: widget.supplier, type: _type),
                     SizedBox(height: 16.h),
                     _DirectionBanner(type: _type),
@@ -1034,5 +1068,55 @@ class _LineState {
     daysCtrl.dispose();
     priceCtrl.dispose();
     discCtrl.dispose();
+  }
+}
+
+// ─── ويدجت اختيار التاريخ ─────────────────────────────────────────────────────
+
+class _InvoiceDateRow extends StatelessWidget {
+  final DateTime date;
+  final VoidCallback onTap;
+
+  const _InvoiceDateRow({required this.date, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fmt = DateFormat('EEEE, d MMMM yyyy', 'ar'); // صيغة التاريخ
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.r),
+              decoration: BoxDecoration(
+                color: ColorsManager.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6.r),
+              ),
+              child: Icon(Icons.calendar_month_rounded, size: 20.r, color: ColorsManager.primaryColor),
+            ),
+            SizedBox(width: 12.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('تاريخ الفاتورة', style: TextStyle(fontSize: 11.sp, color: ColorsManager.defaultTextSecondary, fontWeight: FontWeight.w600)),
+                SizedBox(height: 2.h),
+                Text(fmt.format(date), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: theme.textTheme.bodyMedium?.color)),
+              ],
+            ),
+            const Spacer(),
+            Text('تعديل', style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w700, color: ColorsManager.primaryColor)),
+          ],
+        ),
+      ),
+    );
   }
 }

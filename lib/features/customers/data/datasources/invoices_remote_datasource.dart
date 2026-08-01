@@ -18,6 +18,10 @@ abstract class InvoicesRemoteDataSource {
     required String method,
   });
 
+  Future<List<Map<String, dynamic>>> getInvoiceTemplates();
+  Future<void> saveInvoiceTemplate({required String name, required List<Map<String, dynamic>> items});
+  Future<void> deleteInvoiceTemplate(String id);
+
   Future<Map<String, dynamic>> recordPaymentAndGetSummary({
     required String invoiceId,
     required double amount,
@@ -107,6 +111,37 @@ class InvoicesRemoteDataSourceImpl implements InvoicesRemoteDataSource {
         'p_method':       method,
       });
       return result as String;
+    } catch (e, st) {
+      throw ErrorHandler.handleException(e, st);
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getInvoiceTemplates() async {
+    try {
+      final response = await _supabase.from('invoice_templates').select('*').order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e, st) {
+      throw ErrorHandler.handleException(e, st);
+    }
+  }
+
+  @override
+  Future<void> saveInvoiceTemplate({required String name, required List<Map<String, dynamic>> items}) async {
+    try {
+      await _supabase.from('invoice_templates').insert({
+        'name': name,
+        'items': items,
+      });
+    } catch (e, st) {
+      throw ErrorHandler.handleException(e, st);
+    }
+  }
+
+  @override
+  Future<void> deleteInvoiceTemplate(String id) async {
+    try {
+      await _supabase.from('invoice_templates').delete().eq('id', id);
     } catch (e, st) {
       throw ErrorHandler.handleException(e, st);
     }

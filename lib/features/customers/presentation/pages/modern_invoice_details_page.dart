@@ -48,6 +48,10 @@ class _ModernInvoiceDetailsPageState extends State<ModernInvoiceDetailsPage> {
     super.initState();
     _invoice  = widget.invoice;
     _customer = widget.customer;
+    
+    // Sort items by sortOrder
+    _invoice.items.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    
     final s = context.read<InvoicesCubit>().state;
     if (s is InvoicesLoaded) _paymentSummary = s.paymentSummary;
   }

@@ -23,6 +23,7 @@ class InvoiceItemEntity extends Equatable {
 
   /// How many units have been returned so far (supports partial returns)
   final int returnedQty;
+  final int sortOrder;
 
   const InvoiceItemEntity({
     required this.id,
@@ -38,6 +39,7 @@ class InvoiceItemEntity extends Equatable {
     this.supplierCost,
     this.status = InvoiceItemStatus.out,
     this.returnedQty = 0,
+    this.sortOrder = 0,
   });
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -65,7 +67,11 @@ class InvoiceItemEntity extends Equatable {
   List<Object?> get props => [
     id, invoiceId, itemId, itemName,
     qty, days, pricePerDay, itemDiscount,
-    isSubRented, supplierId, supplierCost, status, returnedQty,
+    isSubRented,
+    supplierId,
+    supplierCost,
+    status,
+    returnedQty,
+    sortOrder,
   ];
 }
-

@@ -20,6 +20,7 @@ abstract class SuppliersRepository {
     required List<SupplierInvoiceItemEntity> items,
     double discount,      // 🆕
     String? notes,
+    DateTime? createdAt,
   });
   Future<Either<Failure, SupplierPaymentSummary>> recordPayment({
     required String invoiceId,

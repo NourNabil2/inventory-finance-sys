@@ -9,6 +9,7 @@ import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_ite
 import 'package:bungee_manage_sys/features/customers/presentation/cubit/invoices_cubit.dart';
 import 'package:bungee_manage_sys/features/inventory/domain/entities/item_entity.dart';
 import 'package:bungee_manage_sys/features/inventory/presentation/cubit/inventory_cubit.dart';
+import 'package:bungee_manage_sys/features/customers/domain/entities/invoice_template_entity.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -94,18 +95,23 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
 
     setState(() => _submitting = true);
 
-    final resolvedItems = _lines.map((l) => InvoiceItemEntity(
-      id:           '',
-      invoiceId:    '',
-      itemId:       l.item!.id,
-      itemName:     l.item!.name,
-      qty:          l.qty,
-      days:         l.days,
-      pricePerDay:  l.pricePerDay,
-      itemDiscount: l.flatDiscount,
-      isSubRented:  l.isSubRented,
-      status:       InvoiceItemStatus.out,
-    )).toList();
+    final resolvedItems = _lines.asMap().entries.map((e) {
+      final idx = e.key;
+      final l = e.value;
+      return InvoiceItemEntity(
+        id:           '',
+        invoiceId:    '',
+        itemId:       l.item!.id,
+        itemName:     l.item!.name,
+        qty:          l.qty,
+        days:         l.days,
+        pricePerDay:  l.pricePerDay,
+        itemDiscount: l.flatDiscount,
+        isSubRented:  l.isSubRented,
+        status:       InvoiceItemStatus.out,
+        sortOrder:    idx,
+      );
+    }).toList();
 
     final jobName    = _jobNameCtrl.text.trim().isEmpty    ? null : _jobNameCtrl.text.trim();
     final production = _productionCtrl.text.trim().isEmpty ? null : _productionCtrl.text.trim();
@@ -129,6 +135,128 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
       amountPaid:  isDraft ? 0.0 : _amtPaid,
       method:      _payMethod,
     );
+  }
+
+  Future<void> _saveAsTemplate() async {
+    if (_lines.isEmpty) {
+      context.showError('invoices.error_no_items'.tr());
+      return;
+    }
+    for (int i = 0; i < _lines.length; i++) {
+      if (_lines[i].item == null) {
+        context.showError('invoices.error_row_no_item'.tr(namedArgs: {'row': '${i + 1}'}));
+        return;
+      }
+    }
+
+    final nameController = TextEditingController();
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حفظ كقالب جديد'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'اسم القالب'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+        ],
+      ),
+    );
+
+    if (shouldSave == true && nameController.text.trim().isNotEmpty && mounted) {
+      final items = _lines.map((l) => TemplateItemModel(
+        itemId: l.item!.id,
+        itemName: l.item!.name,
+        qty: l.qty,
+        days: l.days,
+        pricePerDay: l.pricePerDay,
+        itemDiscount: l.flatDiscount,
+        isSubRented: l.isSubRented,
+        supplierCost: 0,
+      )).toList();
+      
+      await context.read<InvoicesCubit>().saveInvoiceTemplate(nameController.text.trim(), items);
+      if (mounted) context.showSuccess('تم حفظ القالب بنجاح');
+    }
+  }
+
+  Future<void> _loadTemplate() async {
+    final templates = await context.read<InvoicesCubit>().getInvoiceTemplates();
+    if (templates.isEmpty) {
+      if (mounted) context.showError('لا توجد قوالب محفوظة');
+      return;
+    }
+    
+    if (!mounted) return;
+    
+    final isDesktop = MediaQuery.of(context).size.width > 600;
+    
+    Future<void> onDelete(String id, BuildContext ctx) async {
+      await context.read<InvoicesCubit>().deleteInvoiceTemplate(id);
+      if (mounted) Navigator.pop(ctx);
+      _loadTemplate();
+    }
+
+    final InvoiceTemplateEntity? selected = isDesktop
+        ? await showDialog<InvoiceTemplateEntity>(
+            context: context,
+            builder: (ctx) => Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+              backgroundColor: Theme.of(context).cardColor,
+              child: SizedBox(
+                width: 400.w,
+                child: Padding(
+                  padding: EdgeInsets.all(20.w),
+                  child: _TemplatesContent(
+                    templates: templates,
+                    onDelete: (id) => onDelete(id, ctx),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : await showModalBottomSheet<InvoiceTemplateEntity>(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (ctx) => Container(
+              padding: EdgeInsets.all(16.w),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+              ),
+              child: _TemplatesContent(
+                templates: templates,
+                onDelete: (id) => onDelete(id, ctx),
+              ),
+            ),
+          );
+    
+    if (selected != null && mounted) {
+      final allItems = context.read<InventoryCubit>().state is InventoryLoaded 
+          ? (context.read<InventoryCubit>().state as InventoryLoaded).items 
+          : <ItemEntity>[];
+          
+      setState(() {
+        _lines.clear();
+        for (final tItem in selected.items) {
+          final item = allItems.cast<ItemEntity?>().firstWhere((i) => i?.id == tItem.itemId, orElse: () => null);
+          final line = _LineState(item: item);
+          if (item != null) {
+            line.qtyCtrl.text = tItem.qty.toString();
+            line.daysCtrl.text = tItem.days.toString();
+            line.priceCtrl.text = tItem.pricePerDay.toString();
+            line.discCtrl.text = tItem.itemDiscount.toString();
+            line.isSubRented = tItem.isSubRented;
+          }
+          _lines.add(line);
+        }
+      });
+      context.showSuccess('تم تحميل القالب بنجاح');
+    }
   }
 
   @override
@@ -170,6 +298,29 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
                       ),
                       SizedBox(height: 20.h),
 
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('الأصناف', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: _saveAsTemplate,
+                                icon: const Icon(Icons.save_as_outlined),
+                                label: const Text('حفظ كقالب'),
+                              ),
+                              SizedBox(width: 8.w),
+                              TextButton.icon(
+                                onPressed: _loadTemplate,
+                                icon: const Icon(Icons.file_download_outlined),
+                                label: const Text('استيراد قالب'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8.h),
+
                       _ItemPickerSection(
                         lines:     _lines,
                         onAdd:     (item) => setState(() => _lines.add(_LineState(item: item))),
@@ -178,6 +329,10 @@ class _ModernCreateInvoicePageState extends State<ModernCreateInvoicePage> {
                           _lines.removeAt(i);
                         }),
                         onChanged: () => setState(() {}),
+                        onReorder: (oldIndex, newIndex) => setState(() {
+                          final item = _lines.removeAt(oldIndex);
+                          _lines.insert(newIndex, item);
+                        }),
                       ),
                     ],
                   ),
@@ -450,12 +605,14 @@ class _ItemPickerSection extends StatefulWidget {
   final void Function(ItemEntity) onAdd;
   final void Function(int)     onRemove;
   final VoidCallback           onChanged;
+  final void Function(int, int)? onReorder;
 
   const _ItemPickerSection({
     required this.lines,
     required this.onAdd,
     required this.onRemove,
     required this.onChanged,
+    this.onReorder,
   });
 
   @override
@@ -698,19 +855,36 @@ class _ItemPickerSectionState extends State<_ItemPickerSection> {
               border:       Border.all(color: theme.dividerColor)),
           child: widget.lines.isEmpty
               ? _EmptyPlaceholder()
-              : Column(children: [
-            _TableHead(),
-            ...widget.lines.asMap().entries.map((e) => Column(children: [
-              Container(height: 1, color: theme.dividerColor),
-              _LineRow(
-                key:       ValueKey(e.key),
-                line:      e.value,
-                canRemove: true,
-                onRemove:  () => widget.onRemove(e.key),
-                onChanged: widget.onChanged,
-              ),
-            ])),
-          ]),
+              : Column(
+                  children: [
+                    _TableHead(),
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: true,
+                      onReorder: (oldIndex, newIndex) {
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        widget.onReorder?.call(oldIndex, newIndex);
+                      },
+                      itemCount: widget.lines.length,
+                      itemBuilder: (context, index) {
+                        final line = widget.lines[index];
+                        return Column(
+                          key: ValueKey(line),
+                          children: [
+                            Container(height: 1, color: theme.dividerColor),
+                            _LineRow(
+                              line: line,
+                              canRemove: true,
+                              onRemove: () => widget.onRemove(index),
+                              onChanged: widget.onChanged,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
         ),
       ],
     );
@@ -1348,5 +1522,41 @@ class _LineState {
     daysCtrl.dispose();
     priceCtrl.dispose();
     discCtrl.dispose();
+  }
+}
+
+class _TemplatesContent extends StatelessWidget {
+  final List<InvoiceTemplateEntity> templates;
+  final Function(String id) onDelete;
+  const _TemplatesContent({required this.templates, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('اختر القالب', style: Theme.of(context).textTheme.titleLarge),
+        SizedBox(height: 16.h),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: templates.length,
+            itemBuilder: (ctx, i) {
+              final t = templates[i];
+              return ListTile(
+                title: Text(t.name),
+                subtitle: Text('${t.items.length} أصناف'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => onDelete(t.id),
+                ),
+                onTap: () => Navigator.pop(ctx, t),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 }

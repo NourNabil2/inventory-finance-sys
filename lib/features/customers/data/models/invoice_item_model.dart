@@ -18,6 +18,7 @@ class InvoiceItemModel extends InvoiceItemEntity {
     super.supplierCost = 0,
     super.status = InvoiceItemStatus.out,
     super.returnedQty = 0,
+    super.sortOrder = 0,
   });
 
   factory InvoiceItemModel.fromJson(Map<String, dynamic> json) {
@@ -47,6 +48,7 @@ class InvoiceItemModel extends InvoiceItemEntity {
       supplierCost: (json['supplier_cost'] as num?)?.toDouble() ?? 0.0,
       status: status,
       returnedQty: returnedQty,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -65,6 +67,7 @@ class InvoiceItemModel extends InvoiceItemEntity {
         supplierCost: entity.supplierCost,
         status: entity.status,
         returnedQty: entity.returnedQty,
+        sortOrder: entity.sortOrder,
       );
 
   Map<String, dynamic> toJson() => {
@@ -79,6 +82,7 @@ class InvoiceItemModel extends InvoiceItemEntity {
     'supplier_cost': supplierCost,
     'status': status == InvoiceItemStatus.returned ? 'returned' : 'out',
     'returned_qty': returnedQty,
+    'sort_order': sortOrder,
   };
 
   static InvoiceItemStatus _mapStatus(String s) =>

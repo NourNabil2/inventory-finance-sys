@@ -49,8 +49,8 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
     _jobNameCtrl = TextEditingController(text: widget.invoice.jobName ?? '');
     _productionCtrl = TextEditingController(text: widget.invoice.production ?? '');
     _isDraft = widget.invoice.status == InvoiceStatus.draft;
-    _existing = widget.invoice.items
-        .where((i) => i.isOut)
+    final sortedItems = widget.invoice.items.toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    _existing = sortedItems
         .map(_ExistingRow.new)
         .toList();
   }
@@ -99,35 +99,41 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
     final canEditAll = isAdmin || _isDraft;
 
     final modifiedItems = <String, Map<String, dynamic>>{};
+    int existingIdx = 0;
     for (final r in _existing) {
+      final currentSortOrder = existingIdx++;
+      final sortOrderChanged = r.original.sortOrder != currentSortOrder;
       final daysChanged  = r.days != r.original.days;
       final qtyChanged   = canEditAll && r.qty != r.original.qty;
       final priceChanged = canEditAll && r.pricePerDay != r.original.pricePerDay;
       final discChanged  = canEditAll && r.flatDiscount != r.original.itemDiscount;
 
-      if (daysChanged || qtyChanged || priceChanged || discChanged) {
+      if (daysChanged || qtyChanged || priceChanged || discChanged || sortOrderChanged) {
         modifiedItems[r.original.id] = {
           'days':         r.days,
           'qty':          canEditAll ? r.qty          : r.original.qty,
           'pricePerDay':  canEditAll ? r.pricePerDay  : r.original.pricePerDay,
           'flatDiscount': canEditAll ? r.flatDiscount : r.original.itemDiscount,
+          'sort_order':   currentSortOrder,
         };
       }
     }
 
-    final newItemEntities = _newRows
-        .map((r) => InvoiceItemEntity(
-      id:           '',
-      invoiceId:    widget.invoice.id,
-      itemId:       r.item!.id,
-      itemName:     r.item!.name,
-      qty:          r.qty,
-      days:         r.days,
-      pricePerDay:  r.pricePerDay,
-      itemDiscount: r.flatDiscount,
-      status:       InvoiceItemStatus.out,
-    ))
-        .toList();
+    final newItemEntities = _newRows.asMap().entries.map((e) {
+      final r = e.value;
+      return InvoiceItemEntity(
+        id:           '',
+        invoiceId:    widget.invoice.id,
+        itemId:       r.item!.id,
+        itemName:     r.item!.name,
+        qty:          r.qty,
+        days:         r.days,
+        pricePerDay:  r.pricePerDay,
+        itemDiscount: r.flatDiscount,
+        status:       InvoiceItemStatus.out,
+        sortOrder:    _existing.length + e.key,
+      );
+    }).toList();
 
     final pct         = (double.tryParse(_discCtrl.text) ?? 0).clamp(0, 100);
     final newDiscFlat = (_existingSubtotal() + _newSubtotal()) * (pct / 100);
@@ -245,6 +251,10 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
                             });
                           },
                           onChanged: () => setState(() {}),
+                          onReorder: (oldIndex, newIndex) => setState(() {
+                            final item = _existing.removeAt(oldIndex);
+                            _existing.insert(newIndex, item);
+                          }),
                         ),
                         SizedBox(height: 20.h),
                         _NewItemsSection(
@@ -255,6 +265,10 @@ class _ModernEditInvoicePageState extends State<ModernEditInvoicePage> {
                             _newRows.removeAt(i);
                           }),
                           onChanged: () => setState(() {}),
+                          onReorder: (oldIndex, newIndex) => setState(() {
+                            final item = _newRows.removeAt(oldIndex);
+                            _newRows.insert(newIndex, item);
+                          }),
                         ),
                         SizedBox(height: 20.h),
                         _SectionLabel('invoices.invoice_disc_pct'.tr()),
@@ -400,12 +414,14 @@ class _ExistingItemsSection extends StatelessWidget {
   final VoidCallback onChanged;
   final bool isDraft;
   final void Function(int) onRemove;
+  final void Function(int, int)? onReorder;
 
   const _ExistingItemsSection({
     required this.rows,
     required this.onChanged,
     required this.onRemove,
     required this.isDraft,
+    this.onReorder,
   });
 
   @override
@@ -430,15 +446,31 @@ class _ExistingItemsSection extends StatelessWidget {
             child: Column(
               children: [
                 _ExistingHeader(),
-                ...rows.asMap().entries.map((e) => Column(children: [
-                  Container(height: 1, color: theme.dividerColor),
-                  _ExistingRowWidget(
-                    row: e.value,
-                    onChanged: onChanged,
-                    isDraft: isDraft,
-                    onRemove: () => onRemove(e.key),
-                  ),
-                ])),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: true,
+                  onReorder: (oldIndex, newIndex) {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    onReorder?.call(oldIndex, newIndex);
+                  },
+                  itemCount: rows.length,
+                  itemBuilder: (context, index) {
+                    final row = rows[index];
+                    return Column(
+                      key: ValueKey(row),
+                      children: [
+                        Container(height: 1, color: theme.dividerColor),
+                        _ExistingRowWidget(
+                          row: row,
+                          onChanged: onChanged,
+                          isDraft: isDraft,
+                          onRemove: () => onRemove(index),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -510,9 +542,34 @@ class _ExistingRowWidgetState extends State<_ExistingRowWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(r.original.itemName ?? '—',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.sp),
-                    overflow: TextOverflow.ellipsis),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(r.original.itemName ?? '—',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.sp),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    if (!r.original.isOut) ...[
+                      SizedBox(width: 4.w),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                        decoration: BoxDecoration(
+                          color: ColorsManager.errorSurface,
+                          borderRadius: BorderRadius.circular(4.r),
+                          border: Border.all(color: ColorsManager.errorText),
+                        ),
+                        child: Text(
+                          'مُسترجع',
+                          style: TextStyle(
+                            fontSize: 9.sp,
+                            fontWeight: FontWeight.bold,
+                            color: ColorsManager.errorText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 if (isExtended)
                   Text(
                     'invoices.days_extended'.tr(namedArgs: {
@@ -660,6 +717,7 @@ class _NewItemsSection extends StatefulWidget {
   final void Function(ItemEntity) onAdd;
   final void Function(int) onRemove;
   final VoidCallback onChanged;
+  final void Function(int, int)? onReorder;
 
   const _NewItemsSection({
     super.key,
@@ -667,6 +725,7 @@ class _NewItemsSection extends StatefulWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onChanged,
+    this.onReorder,
   });
 
   @override
@@ -906,16 +965,31 @@ class _NewItemsSectionState extends State<_NewItemsSection> {
             child: Column(
               children: [
                 _NewItemsHeader(),
-                ...widget.rows.asMap().entries.map((e) => Column(children: [
-                  Container(height: 1, color: theme.dividerColor),
-                  _NewRowWidget(
-                    key: ValueKey(e.key),
-                    row: e.value,
-                    canRemove: true,
-                    onRemove: () => widget.onRemove(e.key),
-                    onChanged: widget.onChanged,
-                  ),
-                ])),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: true,
+                  onReorder: (oldIndex, newIndex) {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    widget.onReorder?.call(oldIndex, newIndex);
+                  },
+                  itemCount: widget.rows.length,
+                  itemBuilder: (context, index) {
+                    final row = widget.rows[index];
+                    return Column(
+                      key: ValueKey(row),
+                      children: [
+                        Container(height: 1, color: theme.dividerColor),
+                        _NewRowWidget(
+                          row: row,
+                          canRemove: true,
+                          onRemove: () => widget.onRemove(index),
+                          onChanged: widget.onChanged,
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
